@@ -1,4 +1,4 @@
-FROM php:8.3-fpm-alpine
+FROM php:8.4-fpm-alpine
 
 # Install system dependencies and required PHP extensions for Laravel + PostgreSQL
 RUN apk add --no-cache bash nginx supervisor libpq libzip icu-libs curl \
@@ -25,7 +25,7 @@ COPY . .
 
 # Install PHP dependencies
 ENV COMPOSER_ALLOW_SUPERUSER 1
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-req=php+
 
 # Set permissions for Laravel storage and cache
 RUN chown -R www-data:www-data storage bootstrap/cache \
