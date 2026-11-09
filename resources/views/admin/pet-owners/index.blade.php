@@ -331,37 +331,39 @@
                         <i class="fas fa-chevron-right" style="color: #78A886;"></i>
                     </div>
                 </div>
-
-                <!-- Delete Owner Modal -->
-                <div class="modal fade text-start" id="deleteOwnerModal-{{ $owner->id }}" tabindex="-1" aria-hidden="true" onclick="event.stopPropagation();">
-                    <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content" style="border-radius: 24px; border: none;">
-                            <form method="POST" action="{{ route('admin.pet-owners.destroy', $owner->id) }}">
-                                @csrf
-                                @method('DELETE')
-                                <div class="modal-header" style="border-bottom: 1px solid #EAE6DE;">
-                                    <h5 class="modal-title" style="font-family: 'Literata', serif; font-weight: 700; color: #BA1A1A;">
-                                        <i class="fas fa-trash-alt me-2"></i> Delete Client Account
-                                    </h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body" style="font-family: 'Nunito Sans', sans-serif; font-size: 14px; color: #4A4E4A;">
-                                    <p class="mb-2">Are you sure you want to delete the account for <strong>{{ $owner->name }}</strong>?</p>
-                                    <p class="mb-0 text-danger fw-bold"><i class="fas fa-exclamation-triangle me-1"></i> Deleting this owner will permanently remove all linked pets, appointments, and records. This cannot be undone.</p>
-                                </div>
-                                <div class="modal-footer" style="border-top: 1px solid #EAE6DE;">
-                                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
-                                    <button type="submit" class="btn btn-danger rounded-pill px-4" style="background: #BA1A1A; border: none;">
-                                        Delete Client Account
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
             </div>
         @endforeach
     </div>
+
+@foreach($owners as $owner)
+    <!-- Delete Owner Modal -->
+    <div class="modal fade text-start" id="deleteOwnerModal-{{ $owner->id }}" tabindex="-1" aria-hidden="true" onclick="event.stopPropagation();">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 24px; border: none;">
+                <form method="POST" action="{{ route('admin.pet-owners.destroy', $owner->id) }}">
+                    @csrf
+                    @method('DELETE')
+                    <div class="modal-header" style="border-bottom: 1px solid #EAE6DE;">
+                        <h5 class="modal-title" style="font-family: 'Literata', serif; font-weight: 700; color: #BA1A1A;">
+                            <i class="fas fa-trash-alt me-2"></i> Delete Client Account
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" style="font-family: 'Nunito Sans', sans-serif; font-size: 14px; color: #4A4E4A;">
+                        <p class="mb-2">Are you sure you want to delete the account for <strong>{{ $owner->name }}</strong>?</p>
+                        <p class="mb-0 text-danger fw-bold"><i class="fas fa-exclamation-triangle me-1"></i> Deleting this owner will permanently remove all linked pets, appointments, and records. This cannot be undone.</p>
+                    </div>
+                    <div class="modal-footer" style="border-top: 1px solid #EAE6DE;">
+                        <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger rounded-pill px-4" style="background: #BA1A1A; border: none;">
+                            Delete Client Account
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+@endforeach
 
     <div class="pagination-wrap">
         <div class="pagination-info">Showing {{ $owners->firstItem() }}–{{ $owners->lastItem() }} of {{ $owners->total() }}</div>
