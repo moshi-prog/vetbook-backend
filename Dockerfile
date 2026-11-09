@@ -1,10 +1,11 @@
 FROM php:8.4-fpm-alpine
 
-# Install system dependencies and required PHP extensions for Laravel + PostgreSQL
-RUN apk add --no-cache bash nginx supervisor libpq libzip icu-libs curl \
-    && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS postgresql-dev libzip-dev icu-dev \
-    && docker-php-ext-install pdo pdo_pgsql pdo_mysql intl zip opcache bcmath \
-    && apk del .build-deps
+# Install system dependencies
+RUN apk add --no-cache bash nginx supervisor curl
+
+# Install PHP extensions using official installer
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
+RUN install-php-extensions pdo_pgsql pdo_mysql intl zip opcache bcmath
 
 # Copy composer from official image
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -16,7 +17,7 @@ COPY conf/php/www-overrides.conf /usr/local/etc/php-fpm.d/zz-overrides.conf
 COPY conf/nginx/nginx-site.conf /etc/nginx/http.d/default.conf
 COPY conf/supervisor/supervisord.conf /etc/supervisord.conf
 COPY conf/start.sh /start.sh
-RUN chmod +x /start.sh
+RUN sed -i 's/\r$//' /start.sh && chmod +x /start.sh
 
 WORKDIR /var/www/html
 
@@ -25,7 +26,7 @@ COPY . .
 
 # Install PHP dependencies
 ENV COMPOSER_ALLOW_SUPERUSER 1
-RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-req=php+
+RUN composer install --no-dev --no-scripts --optimize-autoloader --no-interaction --ignore-platform-reqs
 
 # Set permissions for Laravel storage and cache
 RUN chown -R www-data:www-data storage bootstrap/cache \

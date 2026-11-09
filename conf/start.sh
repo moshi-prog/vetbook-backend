@@ -3,6 +3,10 @@ set -e
 
 echo "==> Preparing Laravel for production..."
 
+# Discover packages at runtime when environment variables are loaded
+echo "==> Discovering packages..."
+php artisan package:discover --ansi || true
+
 # Create storage symlink if needed
 php artisan storage:link || true
 
