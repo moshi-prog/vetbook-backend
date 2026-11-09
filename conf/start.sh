@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -e
 
+# Create required directories for Laravel and Supervisor logs
+mkdir -p /var/log/supervisor storage/framework/cache/data storage/framework/sessions storage/framework/views
+
 echo "==> Preparing Laravel for production..."
 
-# Discover packages at runtime when environment variables are loaded
-echo "==> Discovering packages..."
+# Discover packages and create storage symlink
 php artisan package:discover --ansi || true
-
-# Create storage symlink if needed
 php artisan storage:link || true
 
-# Cache configs and routes
+# Cache configurations and routes
 echo "==> Caching configurations and routes..."
 php artisan config:cache || true
 php artisan route:cache || true
