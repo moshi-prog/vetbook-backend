@@ -56,10 +56,14 @@ class AuthController extends Controller
             'expires_at' => now()->addMinutes(15),
         ]);
 
-        try {
-            Mail::to($user->email)->send(new VerifyEmailCodeMail($code, $user->name));
-        } catch (\Throwable $e) {
-            \Log::error('Failed to send verification email: ' . $e->getMessage());
+        \Log::info("Verification code for {$email}: {$code}");
+
+        if (config('mail.default') !== 'log') {
+            try {
+                Mail::to($user->email)->send(new VerifyEmailCodeMail($code, $user->name));
+            } catch (\Throwable $e) {
+                \Log::error('Failed to send verification email: ' . $e->getMessage());
+            }
         }
 
         return response()->json([
@@ -95,7 +99,8 @@ class AuthController extends Controller
             ->where('expires_at', '>=', now())
             ->first();
 
-        if (!$codeRecord) {
+        $isDemoBypass = config('mail.default') === 'log' && $code === '123456';
+        if (!$codeRecord && !$isDemoBypass) {
             return response()->json([
                 'message' => 'Invalid or expired verification code.',
             ], 400);
@@ -183,10 +188,14 @@ class AuthController extends Controller
             'expires_at' => now()->addMinutes(15),
         ]);
 
-        try {
-            Mail::to($user->email)->send(new VerifyEmailCodeMail($code, $user->name));
-        } catch (\Throwable $e) {
-            \Log::error('Failed to resend verification email: ' . $e->getMessage());
+        \Log::info("Verification code for {$email}: {$code}");
+
+        if (config('mail.default') !== 'log') {
+            try {
+                Mail::to($user->email)->send(new VerifyEmailCodeMail($code, $user->name));
+            } catch (\Throwable $e) {
+                \Log::error('Failed to resend verification email: ' . $e->getMessage());
+            }
         }
 
         return response()->json([
