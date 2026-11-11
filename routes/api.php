@@ -61,6 +61,17 @@ Route::get('/mail-diagnostic', function () {
     ]);
 });
 
+Route::get('/mail-test-send', function () {
+    try {
+        \Illuminate\Support\Facades\Mail::raw('Live Brevo SMTP test from Render via port ' . config('mail.mailers.smtp.port'), function ($msg) {
+            $msg->to('vetbookbkpetaholic@gmail.com')->subject('Live Render Brevo Test');
+        });
+        return response()->json(['status' => 'success', 'message' => 'Email sent successfully via Brevo!']);
+    } catch (\Throwable $e) {
+        return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+    }
+});
+
 // -------------------------------------------------------------------------
 // Protected routes — require a valid JWT via auth:api middleware
 // -------------------------------------------------------------------------
