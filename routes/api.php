@@ -29,48 +29,6 @@ Route::post('/verify-email',            [AuthController::class, 'verifyEmail']);
 Route::post('/resend-verification-code',[AuthController::class, 'resendVerificationCode']);
 Route::post('/reset-password',          [AuthController::class, 'resetPassword']);
 Route::get('/branches',        [ClinicController::class, 'getBranches']);
-Route::get('/mail-diagnostic', function () {
-    $host = config('mail.mailers.smtp.host');
-    $port = config('mail.mailers.smtp.port');
-    $mailer = config('mail.default');
-
-    $checkPort = function ($h, $p) {
-        $start = microtime(true);
-        $fp = @fsockopen($h, $p, $errno, $errstr, 2);
-        $elapsed = round((microtime(true) - $start) * 1000);
-        if ($fp) {
-            fclose($fp);
-            return "OPEN ({$elapsed}ms)";
-        }
-        return "BLOCKED or TIMEOUT ({$elapsed}ms): {$errstr} [code {$errno}]";
-    };
-
-    return response()->json([
-        'mailer' => $mailer,
-        'host'   => $host,
-        'port'   => $port,
-        'encryption' => config('mail.mailers.smtp.encryption'),
-        'from'   => config('mail.from.address'),
-        'username_prefix' => substr((string) config('mail.mailers.smtp.username'), 0, 8),
-        'ports_check' => [
-            'smtp-relay.brevo.com:587'  => $checkPort('smtp-relay.brevo.com', 587),
-            'smtp-relay.brevo.com:2525' => $checkPort('smtp-relay.brevo.com', 2525),
-            'smtp-relay.brevo.com:465'  => $checkPort('smtp-relay.brevo.com', 465),
-            'smtp.gmail.com:587'        => $checkPort('smtp.gmail.com', 587),
-        ],
-    ]);
-});
-
-Route::get('/mail-test-send', function () {
-    try {
-        \Illuminate\Support\Facades\Mail::raw('Live Brevo SMTP test from Render via port ' . config('mail.mailers.smtp.port'), function ($msg) {
-            $msg->to('vetbookbkpetaholic@gmail.com')->subject('Live Render Brevo Test');
-        });
-        return response()->json(['status' => 'success', 'message' => 'Email sent successfully via Brevo!']);
-    } catch (\Throwable $e) {
-        return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
-    }
-});
 
 // -------------------------------------------------------------------------
 // Protected routes — require a valid JWT via auth:api middleware
