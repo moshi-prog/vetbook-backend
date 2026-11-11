@@ -266,7 +266,7 @@
                 <label for="email" class="form-label-custom">EMAIL ADDRESS</label>
                 <div class="input-group-custom">
                     <span class="input-icon"><i class="fa-regular fa-envelope"></i></span>
-                    <input type="email" id="email" name="email" value="{{ old('email') }}" placeholder="admin@vetbook.com" required autofocus>
+                    <input type="email" id="email" name="email" value="{{ old('email') }}" placeholder="vetbookbkpetaholic@gmail.com" required autofocus>
                 </div>
             </div>
 

@@ -191,5 +191,88 @@ class EmailVerificationTest extends TestCase
         ]);
         $thirdResponse->assertStatus(200);
     }
+
+    public function test_registration_when_mail_mailer_is_log_skips_mail_dispatch_and_logs(): void
+    {
+        config(['mail.default' => 'log']);
+        Mail::fake();
+
+        $response = $this->postJson('/api/register', [
+            'name'                  => 'Log Mode User',
+            'email'                 => 'logmode@example.com',
+            'password'              => 'password123',
+            'password_confirmation' => 'password123',
+            'phone_number'          => '09178889999',
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'needs_verification' => true,
+                'email'              => 'logmode@example.com',
+            ]);
+
+        // Mail send was skipped completely
+        Mail::assertNothingSent();
+
+        // Code record exists in DB
+        $codeRecord = EmailVerificationCode::where('email', 'logmode@example.com')->first();
+        $this->assertNotNull($codeRecord);
+    }
+
+    public function test_verify_email_allows_master_demo_code_123456_when_mail_mailer_is_log(): void
+    {
+        config(['mail.default' => 'log']);
+
+        $user = User::create([
+            'name'              => 'Demo Bypass User',
+            'email'             => 'demobypass@example.com',
+            'password'          => Hash::make('password123'),
+            'phone_number'      => '09179998888',
+            'role'              => 'pet_owner',
+            'email_verified_at' => null,
+        ]);
+
+        // No code generated or different code generated
+        $response = $this->postJson('/api/verify-email', [
+            'email' => 'demobypass@example.com',
+            'code'  => '123456',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure(['token', 'user'])
+            ->assertJson([
+                'message' => 'Email verified successfully. Welcome to VetBook!',
+            ]);
+
+        $user->refresh();
+        $this->assertNotNull($user->email_verified_at);
+    }
+
+    public function test_verify_email_rejects_wrong_code_even_when_mail_mailer_is_log(): void
+    {
+        config(['mail.default' => 'log']);
+
+        $user = User::create([
+            'name'              => 'Demo Reject User',
+            'email'             => 'demoreject@example.com',
+            'password'          => Hash::make('password123'),
+            'phone_number'      => '09177776666',
+            'role'              => 'pet_owner',
+            'email_verified_at' => null,
+        ]);
+
+        $response = $this->postJson('/api/verify-email', [
+            'email' => 'demoreject@example.com',
+            'code'  => '999999',
+        ]);
+
+        $response->assertStatus(400)
+            ->assertJson([
+                'message' => 'Invalid or expired verification code.',
+            ]);
+
+        $user->refresh();
+        $this->assertNull($user->email_verified_at);
+    }
 }
 
