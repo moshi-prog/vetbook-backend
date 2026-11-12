@@ -44,7 +44,7 @@ return [
 
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY') ?: base64_decode('QVEuQWI4Uk42SkF2TjJoRUdfOE90T1VCckZyOHJKelpBel9HdHhzV0Q3Sm1pTExBMlZLV2c='),
-        'model' => env('GEMINI_MODEL', 'gemini-flash-lite-latest'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.5-flash-lite'),
         'base_url' => 'https://generativelanguage.googleapis.com/v1beta/models',
         'timeout' => 15,
     ],

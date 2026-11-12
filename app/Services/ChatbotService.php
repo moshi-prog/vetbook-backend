@@ -146,10 +146,10 @@ class ChatbotService
 
         // Valid Gemini models tested on v1beta API in order of speed & availability
         $modelsToTry = [
+            'gemini-3.5-flash-lite',
             'gemini-flash-lite-latest',
-            'gemini-1.5-flash',
-            'gemini-2.5-flash-lite',
             'gemini-flash-latest',
+            'gemini-2.5-flash',
         ];
 
         $lastError = null;
