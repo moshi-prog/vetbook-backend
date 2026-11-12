@@ -21,32 +21,69 @@ class AuthController extends Controller
      */
     public function register(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'name'                  => 'required|string|max:255',
-            'email'                 => 'required|string|email|max:255|unique:users',
-            'password'              => 'required|string|min:6|confirmed',
-            'phone_number'          => 'required|digits:11',
-        ]);
+        $email = strtolower(trim($request->email ?? ''));
 
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors'  => $validator->errors(),
-            ], 400);
+        // Check if an account already exists with this email
+        $existingUser = User::whereRaw('LOWER(email) = ?', [$email])->first();
+
+        if ($existingUser) {
+            // If the account is ALREADY verified, reject duplicate registration
+            if ($existingUser->email_verified_at !== null) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors'  => ['email' => ['This email is already registered and verified. Please sign in instead.']],
+                ], 400);
+            }
+
+            // If account exists but is UNVERIFIED: validate without unique:users, and update the existing user
+            $validator = Validator::make($request->all(), [
+                'name'         => 'required|string|max:255',
+                'email'        => 'required|string|email|max:255',
+                'password'     => 'required|string|min:6|confirmed',
+                'phone_number' => 'required|digits:11',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors'  => $validator->errors(),
+                ], 400);
+            }
+
+            $existingUser->update([
+                'name'         => trim($request->name),
+                'password'     => Hash::make($request->password),
+                'phone_number' => $request->phone_number,
+            ]);
+
+            $user = $existingUser;
+        } else {
+            // Fresh new user registration
+            $validator = Validator::make($request->all(), [
+                'name'         => 'required|string|max:255',
+                'email'        => 'required|string|email|max:255|unique:users',
+                'password'     => 'required|string|min:6|confirmed',
+                'phone_number' => 'required|digits:11',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors'  => $validator->errors(),
+                ], 400);
+            }
+
+            $user = User::create([
+                'name'              => trim($request->name),
+                'email'             => $email,
+                'password'          => Hash::make($request->password),
+                'phone_number'      => $request->phone_number,
+                'role'              => 'pet_owner',
+                'email_verified_at' => null,
+            ]);
         }
 
-        $email = strtolower(trim($request->email));
-
-        $user = User::create([
-            'name'              => trim($request->name),
-            'email'             => $email,
-            'password'          => Hash::make($request->password),
-            'phone_number'      => $request->phone_number,
-            'role'              => 'pet_owner',
-            'email_verified_at' => null,
-        ]);
-
-        // Generate a 6-digit verification code
+        // Generate fresh 6-digit code
         $code = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
 
         EmailVerificationCode::where('email', $email)->delete();
@@ -59,19 +96,28 @@ class AuthController extends Controller
 
         \Log::info("Verification code for {$email}: {$code}");
 
+        $mailSent = false;
         if (config('mail.default') !== 'log') {
             try {
                 Mail::to($user->email)->send(new VerifyEmailCodeMail($code, $user->name));
+                $mailSent = true;
             } catch (\Throwable $e) {
                 \Log::error('Failed to send verification email: ' . $e->getMessage());
             }
         }
 
-        return response()->json([
+        $responseData = [
             'message'            => 'Registration successful. Please check your email for your 6-digit verification code.',
             'email'              => $user->email,
             'needs_verification' => true,
-        ], 201);
+        ];
+
+        // Include debug_code in local/debug environments so testing is never blocked
+        if (config('app.debug') || app()->environment('local', 'testing')) {
+            $responseData['debug_code'] = $code;
+        }
+
+        return response()->json($responseData, 201);
     }
 
     /**
@@ -199,9 +245,16 @@ class AuthController extends Controller
             }
         }
 
-        return response()->json([
+        $responseData = [
             'message' => 'A new 6-digit verification code has been sent to your email.',
-        ], 200);
+        ];
+
+        // Include debug_code in local/debug environments so testing is never blocked
+        if (config('app.debug') || app()->environment('local', 'testing')) {
+            $responseData['debug_code'] = $code;
+        }
+
+        return response()->json($responseData, 200);
     }
 
     /**

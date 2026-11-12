@@ -30,7 +30,8 @@ class AvatarService
             }
 
             $path = $request->file('avatar')->store($folder, 'public');
-            $url = ClinicSetting::normalizeProtocol(asset('storage/' . $path));
+            $baseUrl = $request?->getSchemeAndHttpHost() ?: request()?->getSchemeAndHttpHost() ?: config('app.url');
+            $url = ClinicSetting::normalizeProtocol(rtrim($baseUrl, '/') . '/storage/' . ltrim($path, '/'));
             return [true, $url, null];
         }
 
@@ -52,7 +53,8 @@ class AvatarService
                 $filename = "{$folder}/{$prefix}_" . time() . '_' . bin2hex(random_bytes(4)) . '.' . $extension;
                 Storage::disk('public')->put($filename, $decoded);
 
-                $url = ClinicSetting::normalizeProtocol(asset('storage/' . $filename));
+                $baseUrl = $request?->getSchemeAndHttpHost() ?: request()?->getSchemeAndHttpHost() ?: config('app.url');
+                $url = ClinicSetting::normalizeProtocol(rtrim($baseUrl, '/') . '/storage/' . ltrim($filename, '/'));
                 return [true, $url, null];
             }
 
