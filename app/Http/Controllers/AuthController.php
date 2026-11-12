@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\VerifyEmailCodeMail;
 use App\Models\EmailVerificationCode;
 use App\Models\User;
+use App\Services\PushNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -478,5 +479,38 @@ class AuthController extends Controller
             'status' => 'success',
             'message' => 'Push token updated successfully.',
         ]);
+    }
+
+    /**
+     * Dispatch an immediate test push notification to the authenticated user's device.
+     */
+    public function testPushNotification(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        if (!$user->push_token) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No push token registered for your account. Please enable notifications on your device.',
+            ], 400);
+        }
+
+        $result = PushNotificationService::send(
+            $user->push_token,
+            'Test Notification 🐾',
+            'Push notifications are working! You will receive updates here even when the app is closed.',
+            ['type' => 'test_push', 'timestamp' => now()->toIso8601String()]
+        );
+
+        return response()->json([
+            'status'  => $result['success'] ? 'success' : 'error',
+            'message' => $result['success']
+                ? 'Push notification dispatched! Check your lockscreen.'
+                : ($result['error'] ?? 'Push notification delivery failed.'),
+            'response' => $result['response'] ?? null,
+        ], $result['success'] ? 200 : 500);
     }
 }

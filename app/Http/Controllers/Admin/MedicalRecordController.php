@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AppNotification;
 use App\Models\MedicalRecord;
 use App\Models\Pet;
+use App\Services\PushNotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -148,6 +150,41 @@ class MedicalRecordController extends Controller
         }
 
         $record = MedicalRecord::create($data);
+
+        // Notify pet owner (In-app + Lockscreen push)
+        try {
+            $record->load(['pet.owner']);
+            $owner = $record->pet?->owner;
+            $petName = $record->pet?->name ?? 'your pet';
+
+            if ($owner) {
+                AppNotification::create([
+                    'user_id' => $owner->id,
+                    'title'   => 'New Medical Record Added 🩺',
+                    'message' => "A new medical record has been added for {$petName} by BK Petaholic.",
+                    'type'    => 'medical_record',
+                    'data'    => [
+                        'record_id' => $record->id,
+                        'pet_id'    => $record->pet_id,
+                    ],
+                ]);
+
+                if ($owner->push_token) {
+                    PushNotificationService::send(
+                        $owner->push_token,
+                        'New Medical Record Added 🩺',
+                        "A new medical record has been added for {$petName} by BK Petaholic.",
+                        [
+                            'record_id' => $record->id,
+                            'pet_id'    => $record->pet_id,
+                            'type'      => 'medical_record',
+                        ]
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Failed to dispatch medical record notification: ' . $e->getMessage());
+        }
 
         return redirect()->route('admin.medical-records.pet', $record->pet_id)
             ->with('success', 'Medical record added successfully.');

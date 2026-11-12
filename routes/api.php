@@ -43,6 +43,7 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/user/password',  [AuthController::class, 'changePassword']);
     Route::post('/user/avatar',   [AuthController::class, 'updateAvatar']);
     Route::post('/user/push-token', [AuthController::class, 'updatePushToken']);
+    Route::post('/user/test-push',   [AuthController::class, 'testPushNotification']);
 
     // -----------------------------------------------------------------------
     // Pet management

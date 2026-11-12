@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -19,6 +20,7 @@ class PushNotificationService
     public static function send(?string $pushToken, string $title, string $body, array $data = []): array
     {
         if (empty($pushToken)) {
+            Log::info("PushNotificationService: Skipped push because pushToken is empty.");
             return ['success' => false, 'error' => 'No push token provided'];
         }
 
@@ -28,33 +30,64 @@ class PushNotificationService
         }
 
         $payload = [
-            'to' => $pushToken,
-            'sound' => 'default',
-            'title' => $title,
-            'body' => $body,
-            'data' => $data,
-            'priority' => 'high',
-            'channelId' => 'default',
+            'to'                   => $pushToken,
+            'sound'                => 'default',
+            'title'                => $title,
+            'body'                 => $body,
+            'data'                 => empty($data) ? new \stdClass() : $data,
+            'priority'             => 'high',
+            'channelId'            => 'default',
             '_displayInForeground' => true,
         ];
 
         try {
+            Log::info("PushNotificationService: Dispatching push to {$pushToken}", ['title' => $title]);
+
             $response = Http::withHeaders([
-                'Accept' => 'application/json',
+                'Accept'          => 'application/json',
                 'Accept-Encoding' => 'gzip, deflate',
-                'Content-Type' => 'application/json',
+                'Content-Type'    => 'application/json',
             ])->timeout(10)->post('https://exp.host/--/api/v2/push/send', $payload);
 
+            $statusCode = $response->status();
+            $resBody = $response->json();
+
+            Log::info("PushNotificationService: Expo HTTP {$statusCode}", ['response' => $resBody]);
+
             if ($response->successful()) {
-                $resData = $response->json();
-                Log::info("PushNotificationService: Push sent successfully to {$pushToken}", ['res' => $resData]);
-                return ['success' => true, 'response' => $resData];
+                // Expo wraps ticket statuses in {"data": [{"status": "ok"|"error", ...}]}
+                $data = $resBody['data'] ?? [];
+                $firstTicket = is_array($data) && isset($data[0]) ? $data[0] : (is_array($data) ? $data : []);
+
+                if (isset($firstTicket['status']) && $firstTicket['status'] === 'error') {
+                    $errType = $firstTicket['details']['error'] ?? 'UnknownTicketError';
+                    $errMsg = $firstTicket['message'] ?? 'Expo ticket returned error status.';
+
+                    Log::warning("PushNotificationService: Expo push rejected for {$pushToken}: {$errType} - {$errMsg}");
+
+                    // If device is not registered, automatically purge stale push token from database
+                    if ($errType === 'DeviceNotRegistered') {
+                        User::where('push_token', $pushToken)->update(['push_token' => null]);
+                        Log::info("PushNotificationService: Purged invalid push token {$pushToken} from users table.");
+                    }
+
+                    return ['success' => false, 'error' => $errMsg, 'details' => $firstTicket];
+                }
+
+                return ['success' => true, 'response' => $resBody];
             } else {
-                Log::warning("PushNotificationService: Failed to send push to {$pushToken}: " . $response->body());
-                return ['success' => false, 'error' => $response->body()];
+                $errContent = $response->body();
+                Log::warning("PushNotificationService: HTTP {$statusCode} error from Expo: " . $errContent);
+
+                if (str_contains($errContent, 'DeviceNotRegistered')) {
+                    User::where('push_token', $pushToken)->update(['push_token' => null]);
+                    Log::info("PushNotificationService: Purged invalid push token {$pushToken} due to DeviceNotRegistered HTTP error.");
+                }
+
+                return ['success' => false, 'error' => $errContent];
             }
         } catch (\Throwable $e) {
-            Log::error("PushNotificationService exception: " . $e->getMessage());
+            Log::error("PushNotificationService exception for {$pushToken}: " . $e->getMessage());
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
