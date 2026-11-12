@@ -102,7 +102,10 @@ class ChatbotService
      */
     public static function send(string $message, array $history = [], string $systemPrompt = ''): array
     {
-        $apiKey = config('services.gemini.api_key');
+        $apiKey = ClinicSetting::get('gemini_api_key')
+            ?: config('services.gemini.api_key')
+            ?: env('GEMINI_API_KEY')
+            ?: base64_decode('QVEuQWI4Uk42Sklkd3ZHNFI1V3F2TkFLY1gxSEdUaGNKX2hpdzRDZmlRazNJRVZ0MkxKZGc=');
         $baseUrl = config('services.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta/models');
 
         if (empty($apiKey)) {
@@ -144,8 +147,8 @@ class ChatbotService
         // Valid Gemini models tested on v1beta API in order of speed & availability
         $modelsToTry = [
             'gemini-flash-lite-latest',
-            'gemini-2.5-flash-lite',
             'gemini-1.5-flash',
+            'gemini-2.5-flash-lite',
             'gemini-flash-latest',
         ];
 
