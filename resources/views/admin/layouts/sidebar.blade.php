@@ -1,23 +1,14 @@
 <aside class="admin-sidebar d-flex flex-column" id="adminSidebar">
     @php
-        $sidebarClinicLogo = \App\Models\ClinicSetting::get('clinic_logo') ?: \App\Models\ClinicSetting::get('logo');
-        $sidebarLogoUrl = null;
-        if (!empty($sidebarClinicLogo)) {
-            $sidebarLogoUrl = str_starts_with($sidebarClinicLogo, 'http') ? $sidebarClinicLogo : asset('storage/' . ltrim($sidebarClinicLogo, '/'));
-        }
+        $sidebarLogoUrl = \App\Models\ClinicSetting::getLogoUrl();
+        $fallbackLogoUrl = asset('images/clinic-logo.png');
     @endphp
     <!-- Brand / Logo (icon + 'VetBook' wordmark in Literata, white) -->
     <div class="sidebar-header px-4 py-3 d-flex align-items-center">
         <a href="{{ Route::has('admin.dashboard') ? route('admin.dashboard') : url('/admin') }}" class="text-decoration-none d-flex align-items-center gap-2">
-            @if(!empty($sidebarLogoUrl))
-                <span class="brand-icon d-inline-flex align-items-center justify-content-center overflow-hidden rounded-circle bg-white" style="border: 1px solid rgba(255,255,255,0.4); padding: 0;">
-                    <img src="{{ $sidebarLogoUrl }}" alt="Logo" class="rounded-circle" style="width: 100%; height: 100%; object-fit: cover;">
-                </span>
-            @else
-                <span class="brand-icon d-inline-flex align-items-center justify-content-center">
-                    <i class="fa-solid fa-paw"></i>
-                </span>
-            @endif
+            <span class="brand-icon d-inline-flex align-items-center justify-content-center overflow-hidden rounded-circle bg-white" style="border: 1px solid rgba(255,255,255,0.4); padding: 0;">
+                <img src="{{ $sidebarLogoUrl }}" alt="Logo" class="rounded-circle" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null; this.src='{{ $fallbackLogoUrl }}';">
+            </span>
             <span class="brand-title">VetBook</span>
             <span class="badge brand-badge ms-1">ADMIN</span>
         </a>

@@ -389,13 +389,11 @@
                     <label class="f-label">Clinic Logo</label>
                     <div class="d-flex align-items-center gap-3 p-3 bg-light rounded-4">
                         <div class="rounded-circle d-flex align-items-center justify-content-center bg-white shadow-sm overflow-hidden" style="width: 56px; height: 56px; color: #4A7C59; flex-shrink: 0; border: 2px solid #EAE6DE;">
-                            @if(!empty($clinic['logo']))
-                                <img id="clinicLogoPreviewImg" src="{{ str_starts_with($clinic['logo'], 'http') ? $clinic['logo'] : asset('storage/' . ltrim($clinic['logo'], '/')) }}" alt="Clinic Logo" style="width: 100%; height: 100%; object-fit: cover;">
-                                <i id="clinicLogoPawIcon" class="fas fa-paw fs-4" style="display: none;"></i>
-                            @else
-                                <img id="clinicLogoPreviewImg" src="" alt="Clinic Logo" style="width: 100%; height: 100%; object-fit: cover; display: none;">
-                                <i id="clinicLogoPawIcon" class="fas fa-paw fs-4"></i>
-                            @endif
+                            @php
+                                $settingsLogoUrl = !empty($clinic['logo_url']) ? $clinic['logo_url'] : \App\Models\ClinicSetting::getLogoUrl();
+                            @endphp
+                            <img id="clinicLogoPreviewImg" src="{{ $settingsLogoUrl }}" alt="Clinic Logo" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null; this.src='{{ asset('images/clinic-logo.png') }}';">
+                            <i id="clinicLogoPawIcon" class="fas fa-paw fs-4" style="display: none;"></i>
                         </div>
 
                         @if(auth()->user()->branch === null)

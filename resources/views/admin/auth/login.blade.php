@@ -1,9 +1,6 @@
 @php
-    $clinicLogo = \App\Models\ClinicSetting::get('clinic_logo') ?: \App\Models\ClinicSetting::get('logo');
-    $logoUrl = null;
-    if (!empty($clinicLogo)) {
-        $logoUrl = str_starts_with($clinicLogo, 'http') ? $clinicLogo : asset('storage/' . ltrim($clinicLogo, '/'));
-    }
+    $logoUrl = \App\Models\ClinicSetting::getLogoUrl();
+    $fallbackLogoUrl = asset('images/clinic-logo.png');
     $clinicName = \App\Models\ClinicSetting::get('clinic_name') ?: \App\Models\ClinicSetting::get('name', 'VetBook Admin');
 @endphp
 <!DOCTYPE html>
@@ -234,12 +231,7 @@
     <div class="login-body">
         <div class="text-center">
             <div class="logo-box overflow-hidden" style="background-color: #F0E8DB; padding: 0;">
-                @if(!empty($logoUrl))
-                    <img src="{{ $logoUrl }}" alt="{{ $clinicName }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 16px;">
-                @else
-                    <i class="fa-solid fa-leaf" style="font-size: 16px; color: #4A7C59;"></i>
-                    <i class="fa-solid fa-paw" style="font-size: 18px; color: #4A7C59;"></i>
-                @endif
+                <img src="{{ $logoUrl }}" alt="{{ $clinicName }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 16px;" onerror="this.onerror=null; this.src='{{ $fallbackLogoUrl }}';">
             </div>
             <div class="brand-title">{{ $clinicName }}</div>
             <div class="brand-subtitle">Sign in to manage the clinic</div>

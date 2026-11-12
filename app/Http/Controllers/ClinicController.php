@@ -179,19 +179,7 @@ class ClinicController extends Controller
             ],
         ];
 
-        $logo = ClinicSetting::get('clinic_logo') ?: ClinicSetting::get('logo');
-        $logoUrl = null;
-        if (!empty($logo)) {
-            if (str_starts_with($logo, 'http')) {
-                $logoUrl = $logo;
-            } else {
-                $logoUrl = request()->getSchemeAndHttpHost() . '/storage/' . ltrim($logo, '/');
-            }
-
-            if (str_contains($logoUrl, 'ngrok') || request()->header('x-forwarded-proto') === 'https' || request()->isSecure()) {
-                $logoUrl = preg_replace('/^http:\/\//i', 'https://', $logoUrl);
-            }
-        }
+        $logoUrl = ClinicSetting::getLogoUrl();
 
         $clinic = [
             'name' => ClinicSetting::get('clinic_name') ?: ClinicSetting::get('name', 'BK Petaholic Animal Clinic'),

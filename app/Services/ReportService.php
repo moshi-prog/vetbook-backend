@@ -16,14 +16,7 @@ class ReportService
         $clinicName = ClinicSetting::get('clinic_name', 'BK Petaholic Animal Clinic');
         $tagline = ClinicSetting::get('clinic_tagline', 'Compassionate care for your beloved animal companions');
         $accreditation = ClinicSetting::get('clinic_accreditation', 'BAI-RVD-2024-0089');
-        $logo = ClinicSetting::get('clinic_logo') ?: ClinicSetting::get('logo', null);
-
-        $logoUrl = null;
-        if ($logo) {
-            $logoUrl = Str::startsWith($logo, ['http://', 'https://', '//'])
-                ? $logo
-                : asset('storage/' . ltrim($logo, '/'));
-        }
+        $logoUrl = ClinicSetting::getLogoUrl();
 
         $currentBranch = $branch ?? (auth()->check() ? auth()->user()->branch : null);
 

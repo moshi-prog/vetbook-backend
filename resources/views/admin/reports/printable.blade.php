@@ -331,17 +331,11 @@
         {{-- Branded Clinic Header --}}
         <div class="clinic-header">
             <div class="clinic-brand">
-                @if(!empty($clinic['logo_url']))
-                    <img src="{{ $clinic['logo_url'] }}" alt="Clinic Logo" class="clinic-logo"
-                         onerror="this.style.display='none'; document.getElementById('logo-fb').style.display='inline-flex';">
-                    <div id="logo-fb" class="clinic-logo-fallback" style="display: none;">
-                        <i class="fas fa-paw"></i>
-                    </div>
-                @else
-                    <div class="clinic-logo-fallback">
-                        <i class="fas fa-paw"></i>
-                    </div>
-                @endif
+                @php
+                    $printableLogo = !empty($clinic['logo_url']) ? $clinic['logo_url'] : \App\Models\ClinicSetting::getLogoUrl();
+                @endphp
+                <img src="{{ $printableLogo }}" alt="Clinic Logo" class="clinic-logo"
+                     onerror="this.onerror=null; this.src='{{ asset('images/clinic-logo.png') }}';">
                 <div class="clinic-title">
                     <h1>{{ $clinic['clinic_name'] }}</h1>
                     <div class="tagline">{{ $clinic['tagline'] }}</div>

@@ -36,6 +36,7 @@ class SettingsController extends Controller
             'phone' => ClinicSetting::get('clinic_phone', '+63 917 123 4567'),
             'accreditation' => ClinicSetting::get('clinic_accreditation', 'BAI-RVD-2024-0089'),
             'logo' => ClinicSetting::get('clinic_logo') ?: ClinicSetting::get('logo', null),
+            'logo_url' => ClinicSetting::getLogoUrl(),
             'hours_weekday' => $hoursWeekday,
             'hours_saturday' => $hoursSaturday,
             'hours_sunday' => $hoursSunday,
@@ -304,12 +305,20 @@ class SettingsController extends Controller
 
                         ClinicSetting::set('clinic_logo', $filename);
                         ClinicSetting::set('logo', $filename);
+                        ClinicSetting::set('clinic_logo_data', $dataUrl);
                     }
                 }
             } elseif ($request->hasFile('logo') && $request->file('logo')->isValid()) {
                 $path = $request->file('logo')->store('clinic', 'public');
                 ClinicSetting::set('clinic_logo', $path);
                 ClinicSetting::set('logo', $path);
+                try {
+                    $fileContents = file_get_contents($request->file('logo')->getRealPath());
+                    $mime = $request->file('logo')->getMimeType() ?: 'image/png';
+                    ClinicSetting::set('clinic_logo_data', 'data:' . $mime . ';base64,' . base64_encode($fileContents));
+                } catch (\Throwable $e) {
+                    // Ignore if cannot read file contents
+                }
             }
         }
 
