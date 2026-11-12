@@ -35,6 +35,7 @@ class PushNotificationService
             'data' => $data,
             'priority' => 'high',
             'channelId' => 'default',
+            '_displayInForeground' => true,
         ];
 
         try {

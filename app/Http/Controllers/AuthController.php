@@ -463,7 +463,7 @@ class AuthController extends Controller
     public function updatePushToken(Request $request)
     {
         $request->validate([
-            'push_token' => 'required|string',
+            'push_token' => 'nullable|string',
         ]);
 
         $user = auth()->user();
