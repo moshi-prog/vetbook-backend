@@ -43,7 +43,7 @@ return [
     ],
 
     'gemini' => [
-        'api_key' => env('GEMINI_API_KEY') ?: base64_decode('QVEuQWI4Uk42Sklkd3ZHNFI1V3F2TkFLY1gxSEdUaGNKX2hpdzRDZmlRazNJRVZ0MkxKZGc='),
+        'api_key' => env('GEMINI_API_KEY') ?: base64_decode('QVEuQWI4Uk42SkF2TjJoRUdfOE90T1VCckZyOHJKelpBel9HdHhzV0Q3Sm1pTExBMlZLV2c='),
         'model' => env('GEMINI_MODEL', 'gemini-flash-lite-latest'),
         'base_url' => 'https://generativelanguage.googleapis.com/v1beta/models',
         'timeout' => 15,

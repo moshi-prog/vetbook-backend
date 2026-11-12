@@ -105,7 +105,7 @@ class ChatbotService
         $apiKey = ClinicSetting::get('gemini_api_key')
             ?: config('services.gemini.api_key')
             ?: env('GEMINI_API_KEY')
-            ?: base64_decode('QVEuQWI4Uk42Sklkd3ZHNFI1V3F2TkFLY1gxSEdUaGNKX2hpdzRDZmlRazNJRVZ0MkxKZGc=');
+            ?: base64_decode('QVEuQWI4Uk42SkF2TjJoRUdfOE90T1VCckZyOHJKelpBel9HdHhzV0Q3Sm1pTExBMlZLV2c=');
         $baseUrl = config('services.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta/models');
 
         if (empty($apiKey)) {
