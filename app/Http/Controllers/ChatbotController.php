@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClinicSetting;
 use App\Services\ChatbotService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -31,9 +32,9 @@ class ChatbotController extends Controller
         );
 
         if (!$result['success']) {
-            // Return a graceful fallback reply instead of 500
+            $clinicPhone = ClinicSetting::get('clinic_phone', '0917-123-4567');
             return response()->json([
-                'reply' => "I'm having trouble connecting right now. Please try again in a moment, or call the clinic directly at (043) 723-4567.",
+                'reply' => "I'm having trouble connecting right now. Please try again in a moment, or call the clinic directly at {$clinicPhone}.",
                 'error' => $result['error'],
             ], 200);
         }

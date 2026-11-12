@@ -2,43 +2,95 @@
 
 namespace App\Services;
 
+use App\Models\ClinicSetting;
+use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class ChatbotService
 {
     /**
-     * Build the system prompt based on the pet owner's context.
+     * Build the dynamic system prompt grounded in live clinic settings and user context.
      */
-    public static function buildSystemPrompt($user): string
+    public static function buildSystemPrompt($user = null): string
     {
-        $prompt = "You are VetBook Assistant, an AI assistant for BK Petaholic Animal Clinic, NOT a licensed veterinarian. "
-            . "BK Petaholic is a veterinary clinic in Batangas, Philippines with two branches: "
-            . "Mabini Branch (142 Mabini St., Poblacion) and Batangas City Branch "
-            . "(N.F. Almario Building, Kumintang Ilaya).\n\n"
-            . "Clinic hours: Monday to Saturday 9:00 AM - 6:00 PM, Sunday 10:00 AM - 4:00 PM.\n\n"
-            . "STRICT CLINICAL SAFETY RULES:\n"
-            . "- You are NOT a licensed veterinarian. NEVER give medical diagnoses, drug dosages, or specific treatment instructions.\n"
-            . "- NEVER prescribe, recommend, or suggest medications, dosages, or home remedies involving drugs or chemicals.\n"
-            . "- If asked about illness or symptoms, provide only general comfort observations and brief wellness tips (e.g., keep the pet comfortable, hydrated, quiet, and do not feed if vomiting). Keep responses concise and easy to read (2-3 short paragraphs maximum).\n"
-            . "- For severe signs (persistent vomiting, lethargy, difficulty breathing, trauma, bleeding, poisoning), urge the owner to seek immediate veterinary care.\n\n"
-            . "MANDATORY CLOSING (MUST BE INCLUDED AT THE END OF EVERY ANSWER):\n"
-            . "- At the end of EVERY answer, warmly advise the owner to bring their pet to BK Petaholic Animal Clinic (Mabini Branch or Batangas City Branch) for a professional examination, and remind them they can book an appointment right here in the VetBook app.\n\n"
-            . "GENERAL CAPABILITIES:\n"
-            . "- Answer questions about clinic services, branch locations, and operating hours.\n"
-            . "- Assist pet owners with general care knowledge while maintaining a warm, empathetic, and professional tone.\n";
+        // 1. Current Philippine Time Awareness
+        $now = Carbon::now('Asia/Manila');
+        $currentDateTimeStr = $now->format('l, F j, Y - g:i A');
+        $currentDay = $now->format('l');
 
+        // 2. Dynamic Clinic Identity from clinic_settings
+        $clinicName = ClinicSetting::get('clinic_name') ?: ClinicSetting::get('name', 'BK Petaholic Animal Clinic');
+        $clinicTagline = ClinicSetting::get('clinic_tagline') ?: ClinicSetting::get('tagline', 'Compassionate Care for Batangas Pets');
+        $clinicPhone = ClinicSetting::get('clinic_phone', '0917-123-4567');
+        $clinicEmail = ClinicSetting::get('clinic_email', 'info@bkpetaholic.com');
+
+        // 3. Dynamic Operating Hours from clinic_settings
+        $hoursWeekday = ClinicSetting::get('hours_weekday', '9:00 AM - 6:00 PM');
+        $hoursSaturday = ClinicSetting::get('hours_saturday', '9:00 AM - 6:00 PM');
+        $hoursSunday = ClinicSetting::get('hours_sunday', '10:00 AM - 4:00 PM');
+
+        // Branch-specific hours (if configured, otherwise fall back to global)
+        $mabiniWeekday = ClinicSetting::get('branch_mabini_hours_weekday', $hoursWeekday);
+        $mabiniSunday = ClinicSetting::get('branch_mabini_hours_sunday', $hoursSunday);
+        $batangasWeekday = ClinicSetting::get('branch_batangas_hours_weekday', $hoursWeekday);
+        $batangasSunday = ClinicSetting::get('branch_batangas_hours_sunday', $hoursSunday);
+
+        // 4. Branch Locations & Independent Hotlines
+        $mabiniPhone = ClinicSetting::get('branch_mabini_phone', '0917-123-4567');
+        $batangasPhone = ClinicSetting::get('branch_batangas_phone', '0918-765-4321');
+
+        $prompt = "You are VetBook Assistant, the warm, helpful AI companion for {$clinicName} ({$clinicTagline}).\n\n"
+            . "CURRENT TIME & DATE:\n"
+            . "• Current Philippine Standard Time: {$currentDateTimeStr} (Today is {$currentDay}).\n"
+            . "• Use this current time to determine if a branch is currently open or closed when the user asks.\n\n"
+            . "OFFICIAL CLINIC LOCATIONS & REAL-TIME OPERATING HOURS:\n"
+            . "1. Mabini Branch:\n"
+            . "   - Address: 142 Mabini St., Poblacion, Mabini, Batangas, Philippines\n"
+            . "   - Hotline / Mobile: {$mabiniPhone}\n"
+            . "   - Hours (Monday to Saturday): {$mabiniWeekday}\n"
+            . "   - Hours (Sunday): {$mabiniSunday}\n\n"
+            . "2. Batangas City Branch:\n"
+            . "   - Address: N.F. Almario Bldg, Kumintang Ilaya, Batangas City, Batangas, Philippines\n"
+            . "   - Hotline / Mobile: {$batangasPhone}\n"
+            . "   - Hours (Monday to Saturday): {$batangasWeekday}\n"
+            . "   - Hours (Sunday): {$batangasSunday}\n\n"
+            . "General Support Hotline: {$clinicPhone} | Email: {$clinicEmail}\n\n"
+            . "SERVICES OFFERED:\n"
+            . "• General veterinary consultations & health checkups\n"
+            . "• Complete pet vaccinations (Anti-Rabies, 5-in-1, 6-in-1, 8-in-1 for dogs, 4-in-1 FVRCP for cats)\n"
+            . "• Deworming and heartworm prevention\n"
+            . "• Minor and major surgical procedures (spay, neuter, soft tissue)\n"
+            . "• Professional grooming, medicated baths, and hygiene dips\n"
+            . "• Diagnostic testing (CBC, blood chemistry, rapid viral antigen test kits for Parvo/Distemper)\n"
+            . "• Emergency veterinary care\n\n"
+            . "HOW CLIENTS BOOK APPOINTMENTS:\n"
+            . "• Remind owners that they can book visits directly inside this VetBook mobile app by tapping the 'Bookings' tab or the 'Book an appointment' button below.\n\n"
+            . "STRICT CLINICAL SAFETY RULES:\n"
+            . "1. You are an AI assistant, NOT a licensed veterinarian. NEVER provide definitive medical diagnoses, drug dosages, or chemical treatment plans.\n"
+            . "2. NEVER prescribe human medications (e.g. Paracetamol/Ibuprofen are toxic to pets).\n"
+            . "3. For illness symptoms, offer only gentle comfort observations (keep the pet warm, hydrated, resting) and keep replies concise (2-3 short paragraphs max).\n"
+            . "4. For urgent red-flag symptoms (difficulty breathing, seizures, trauma, severe bleeding, continuous vomiting), immediately urge the owner to call the clinic hotline ({$clinicPhone}) or visit the nearest branch right away.\n"
+            . "5. End answers with a warm, encouraging invitation to visit BK Petaholic Animal Clinic or book an appointment in the app.\n";
+
+        // 5. User & Pet Personalization
         if ($user) {
-            $prompt .= "\nYou are speaking with {$user->name}.";
+            $prompt .= "\nPET OWNER CONTEXT:\n"
+                . "• You are chatting with {$user->name}.\n";
 
             $pets = $user->pets ?? collect();
             if ($pets->isNotEmpty()) {
-                $petList = $pets->map(function ($p) {
-                    return "{$p->name} ({$p->species}" . ($p->breed ? ", {$p->breed}" : "") . ")";
-                })->join(", ");
-                $prompt .= " Their registered pets are: {$petList}. "
-                    . "Reference these pets when relevant, but do not pretend to know their "
-                    . "medical history in detail.";
+                $petDescriptions = $pets->map(function ($p) {
+                    $details = [$p->species ?: 'Pet'];
+                    if ($p->breed) $details[] = $p->breed;
+                    if ($p->age) $details[] = "{$p->age} yrs old";
+                    if ($p->gender) $details[] = $p->gender;
+                    return "{$p->name} (" . implode(', ', $details) . ")";
+                })->implode('; ');
+
+                $prompt .= "• Registered pets: {$petDescriptions}.\n"
+                    . "• Greet and refer to the owner's pets naturally by name when appropriate.\n";
             }
         }
 
@@ -46,27 +98,29 @@ class ChatbotService
     }
 
     /**
-     * Send a message to Gemini and get a response.
-     *
-     * @param string $message  The user's message
-     * @param array  $history  Previous messages in Gemini format:
-     *                         [['role' => 'user', 'parts' => [['text' => '...']]], ...]
-     * @param string $systemPrompt
-     * @return array ['success' => bool, 'reply' => string|null, 'error' => string|null]
+     * Send a message to Google Gemini API with reliable model fallback and fast timeouts.
      */
     public static function send(string $message, array $history = [], string $systemPrompt = ''): array
     {
         $apiKey = config('services.gemini.api_key');
-        $configuredModel = config('services.gemini.model');
         $baseUrl = config('services.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta/models');
-        $timeout = config('services.gemini.timeout', 20);
 
         if (empty($apiKey)) {
-            return ['success' => false, 'reply' => null, 'error' => 'Chatbot not configured'];
+            Log::error('ChatbotService: GEMINI_API_KEY is missing or empty.');
+            return ['success' => false, 'reply' => null, 'error' => 'Chatbot API key not configured'];
         }
 
-        // Build the contents array
-        $contents = $history;
+        // Build contents history
+        $contents = [];
+        foreach ($history as $item) {
+            if (!empty($item['role']) && !empty($item['parts'])) {
+                $contents[] = [
+                    'role' => $item['role'] === 'user' ? 'user' : 'model',
+                    'parts' => $item['parts'],
+                ];
+            }
+        }
+
         $contents[] = [
             'role' => 'user',
             'parts' => [['text' => $message]],
@@ -76,7 +130,7 @@ class ChatbotService
             'contents' => $contents,
             'generationConfig' => [
                 'temperature' => 0.7,
-                'maxOutputTokens' => 1200,
+                'maxOutputTokens' => 1000,
                 'topP' => 0.95,
             ],
         ];
@@ -87,45 +141,39 @@ class ChatbotService
             ];
         }
 
-        // Active models to try in order
-        $modelsToTry = array_values(array_unique(array_filter([
+        // Valid Gemini models tested on v1beta API in order of speed & availability
+        $modelsToTry = [
             'gemini-flash-lite-latest',
-            'gemini-3.5-flash',
-            $configuredModel,
-            'gemini-3.5-flash-lite',
-            'gemini-3.8-flash',
-        ])));
+            'gemini-2.5-flash-lite',
+            'gemini-1.5-flash',
+            'gemini-flash-latest',
+        ];
 
         $lastError = null;
 
-        foreach ($modelsToTry as $m) {
+        foreach ($modelsToTry as $model) {
             try {
-                $url = "{$baseUrl}/{$m}:generateContent?key={$apiKey}";
+                $endpoint = "{$baseUrl}/{$model}:generateContent?key={$apiKey}";
 
-                $response = Http::timeout($timeout)
+                $response = Http::timeout(10)
                     ->withHeaders(['Content-Type' => 'application/json'])
-                    ->post($url, $payload);
+                    ->post($endpoint, $payload);
 
-                if (!$response->successful()) {
-                    Log::warning("Gemini API error with model {$m}", [
-                        'status' => $response->status(),
-                        'body' => $response->body(),
+                if ($response->successful()) {
+                    $body = $response->json();
+                    $reply = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
+
+                    if (!empty($reply)) {
+                        return ['success' => true, 'reply' => trim($reply), 'error' => null];
+                    }
+                } else {
+                    Log::warning("Gemini model {$model} returned status {$response->status()}", [
+                        'response' => $response->body()
                     ]);
-                    $lastError = "Model {$m} returned HTTP " . $response->status();
-                    continue;
+                    $lastError = "Model {$model} returned HTTP " . $response->status();
                 }
-
-                $body = $response->json();
-                $reply = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
-
-                if (!$reply) {
-                    $lastError = "Model {$m} returned empty response";
-                    continue;
-                }
-
-                return ['success' => true, 'reply' => trim($reply), 'error' => null];
             } catch (\Throwable $e) {
-                Log::warning("Gemini exception with model {$m}", ['message' => $e->getMessage()]);
+                Log::warning("Gemini exception with model {$model}: " . $e->getMessage());
                 $lastError = $e->getMessage();
             }
         }
@@ -133,7 +181,7 @@ class ChatbotService
         return [
             'success' => false,
             'reply' => null,
-            'error' => 'AI service unavailable: ' . ($lastError ?? 'unknown error'),
+            'error' => 'AI service unavailable: ' . ($lastError ?? 'Timeout'),
         ];
     }
 }
