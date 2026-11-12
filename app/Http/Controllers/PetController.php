@@ -43,7 +43,8 @@ class PetController extends Controller
             'gender'             => 'nullable|string|in:male,female,Male,Female',
             'weight'             => 'nullable|numeric|min:0',
             'medical_conditions' => 'nullable|string',
-            'avatar_url'         => 'nullable|string|url',
+            'avatar_url'         => 'nullable|string',
+            'avatar'             => 'nullable',
         ]);
 
         if ($validator->fails()) {
@@ -51,6 +52,16 @@ class PetController extends Controller
                 'message' => 'Validation failed',
                 'errors'  => $validator->errors(),
             ], 400);
+        }
+
+        $avatarUrl = null;
+        if ($request->hasFile('avatar') || $request->filled('avatar') || $request->filled('avatar_url')) {
+            [$success, $processedUrl] = \App\Services\AvatarService::processAvatar($request, 'pet_avatars', 'pet_' . $user->id);
+            if ($success) {
+                $avatarUrl = $processedUrl;
+            } elseif ($request->filled('avatar_url') && (str_starts_with($request->avatar_url, 'http://') || str_starts_with($request->avatar_url, 'https://'))) {
+                $avatarUrl = \App\Models\ClinicSetting::normalizeProtocol($request->avatar_url);
+            }
         }
 
         $pet = Pet::create([
@@ -62,7 +73,7 @@ class PetController extends Controller
             'gender'             => $request->gender,
             'weight'             => $request->weight,
             'medical_conditions' => $request->medical_conditions,
-            'avatar_url'         => $request->avatar_url,
+            'avatar_url'         => $avatarUrl,
         ]);
 
         return response()->json([
@@ -120,7 +131,8 @@ class PetController extends Controller
             'gender'             => 'nullable|string|in:male,female,Male,Female',
             'weight'             => 'nullable|numeric|min:0',
             'medical_conditions' => 'nullable|string',
-            'avatar_url'         => 'nullable|string|url',
+            'avatar_url'         => 'nullable|string',
+            'avatar'             => 'nullable',
         ]);
 
         if ($validator->fails()) {
@@ -128,6 +140,15 @@ class PetController extends Controller
                 'message' => 'Validation failed',
                 'errors'  => $validator->errors(),
             ], 400);
+        }
+
+        if ($request->hasFile('avatar') || $request->filled('avatar') || ($request->filled('avatar_url') && str_starts_with($request->avatar_url, 'data:image/'))) {
+            [$success, $processedUrl] = \App\Services\AvatarService::processAvatar($request, 'pet_avatars', 'pet_' . $pet->id);
+            if ($success) {
+                $pet->avatar_url = $processedUrl;
+            }
+        } elseif ($request->has('avatar_url')) {
+            $pet->avatar_url = $request->avatar_url ? \App\Models\ClinicSetting::normalizeProtocol($request->avatar_url) : null;
         }
 
         $pet->fill($request->only([
@@ -138,7 +159,6 @@ class PetController extends Controller
             'gender',
             'weight',
             'medical_conditions',
-            'avatar_url',
         ]));
 
         $pet->save();
@@ -178,6 +198,7 @@ class PetController extends Controller
 
     /**
      * Upload or update pet avatar.
+     * Supports both multipart image uploads and base64 data URLs.
      *
      * POST /api/pets/{id}/avatar
      */
@@ -195,19 +216,14 @@ class PetController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $validator = Validator::make($request->all(), [
-            'avatar' => 'required|image|mimes:jpeg,png,jpg,webp|max:4096',
-        ]);
+        [$success, $avatarUrl, $error] = \App\Services\AvatarService::processAvatar($request, 'pet_avatars', 'pet_' . $pet->id);
 
-        if ($validator->fails()) {
+        if (!$success) {
             return response()->json([
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors(),
+                'errors'  => ['avatar' => [$error]],
             ], 422);
         }
-
-        $path = $request->file('avatar')->store('pet_avatars', 'public');
-        $avatarUrl = url('storage/' . $path);
 
         $pet->avatar_url = $avatarUrl;
         $pet->save();

@@ -309,6 +309,7 @@ class AuthController extends Controller
 
     /**
      * Update authenticated user's avatar.
+     * Supports both multipart image uploads and base64 data URLs.
      *
      * POST /api/user/avatar
      */
@@ -316,19 +317,14 @@ class AuthController extends Controller
     {
         $user = JWTAuth::parseToken()->authenticate();
 
-        $validator = Validator::make($request->all(), [
-            'avatar' => 'required|image|mimes:jpeg,png,jpg,webp|max:4096',
-        ]);
+        [$success, $avatarUrl, $error] = \App\Services\AvatarService::processAvatar($request, 'avatars', 'user_' . $user->id);
 
-        if ($validator->fails()) {
+        if (!$success) {
             return response()->json([
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors(),
+                'errors'  => ['avatar' => [$error]],
             ], 422);
         }
-
-        $path = $request->file('avatar')->store('avatars', 'public');
-        $avatarUrl = url('storage/' . $path);
 
         $user->avatar_url = $avatarUrl;
         $user->save();
