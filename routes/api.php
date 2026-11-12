@@ -29,6 +29,7 @@ Route::post('/verify-email',            [AuthController::class, 'verifyEmail']);
 Route::post('/resend-verification-code',[AuthController::class, 'resendVerificationCode']);
 Route::post('/reset-password',          [AuthController::class, 'resetPassword']);
 Route::get('/branches',        [ClinicController::class, 'getBranches']);
+Route::get('/clinic',          [ClinicController::class, 'getClinicInfo']);
 
 // -------------------------------------------------------------------------
 // Protected routes — require a valid JWT via auth:api middleware

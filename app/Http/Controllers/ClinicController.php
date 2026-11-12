@@ -182,7 +182,11 @@ class ClinicController extends Controller
         $logo = ClinicSetting::get('clinic_logo') ?: ClinicSetting::get('logo');
         $logoUrl = null;
         if (!empty($logo)) {
-            $logoUrl = str_starts_with($logo, 'http') ? $logo : url('storage/' . ltrim($logo, '/'));
+            if (str_starts_with($logo, 'http')) {
+                $logoUrl = $logo;
+            } else {
+                $logoUrl = request()->getSchemeAndHttpHost() . '/storage/' . ltrim($logo, '/');
+            }
 
             if (str_contains($logoUrl, 'ngrok') || request()->header('x-forwarded-proto') === 'https' || request()->isSecure()) {
                 $logoUrl = preg_replace('/^http:\/\//i', 'https://', $logoUrl);
@@ -202,5 +206,10 @@ class ClinicController extends Controller
             'data' => $branches,
             'clinic' => $clinic,
         ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    }
+
+    public function getClinicInfo(): JsonResponse
+    {
+        return $this->getBranches();
     }
 }

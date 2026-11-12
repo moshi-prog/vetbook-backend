@@ -1,9 +1,20 @@
+@php
+    $clinicLogo = \App\Models\ClinicSetting::get('clinic_logo') ?: \App\Models\ClinicSetting::get('logo');
+    $logoUrl = null;
+    if (!empty($clinicLogo)) {
+        $logoUrl = str_starts_with($clinicLogo, 'http') ? $clinicLogo : asset('storage/' . ltrim($clinicLogo, '/'));
+    }
+    $clinicName = \App\Models\ClinicSetting::get('clinic_name') ?: \App\Models\ClinicSetting::get('name', 'VetBook Admin');
+@endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VetBook Admin - Login</title>
+    <title>{{ $clinicName }} - Login</title>
+    @if(!empty($logoUrl))
+        <link rel="icon" type="image/png" href="{{ $logoUrl }}">
+    @endif
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -222,11 +233,15 @@
     <div class="decorative-bar"></div>
     <div class="login-body">
         <div class="text-center">
-            <div class="logo-box">
-                <i class="fa-solid fa-leaf" style="font-size: 16px;"></i>
-                <i class="fa-solid fa-paw" style="font-size: 18px;"></i>
+            <div class="logo-box overflow-hidden" style="background-color: #F0E8DB; padding: 0;">
+                @if(!empty($logoUrl))
+                    <img src="{{ $logoUrl }}" alt="{{ $clinicName }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 16px;">
+                @else
+                    <i class="fa-solid fa-leaf" style="font-size: 16px; color: #4A7C59;"></i>
+                    <i class="fa-solid fa-paw" style="font-size: 18px; color: #4A7C59;"></i>
+                @endif
             </div>
-            <div class="brand-title">VetBook Admin</div>
+            <div class="brand-title">{{ $clinicName }}</div>
             <div class="brand-subtitle">Sign in to manage the clinic</div>
         </div>
 
