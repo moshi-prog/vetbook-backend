@@ -30,6 +30,7 @@ Route::post('/resend-verification-code',[AuthController::class, 'resendVerificat
 Route::post('/reset-password',          [AuthController::class, 'resetPassword']);
 Route::get('/branches',        [ClinicController::class, 'getBranches']);
 Route::get('/clinic',          [ClinicController::class, 'getClinicInfo']);
+Route::get('/push/vapid-key',  [AuthController::class, 'getVapidPublicKey']);
 
 // -------------------------------------------------------------------------
 // Protected routes — require a valid JWT via auth:api middleware

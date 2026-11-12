@@ -5,13 +5,15 @@ namespace App\Services;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Minishlink\WebPush\Subscription;
+use Minishlink\WebPush\WebPush;
 
 class PushNotificationService
 {
     /**
-     * Dispatch a native push notification to an Expo push token.
+     * Dispatch a push notification to an Expo push token or Web Push PWA subscription.
      *
-     * @param string|null $pushToken Expo push token (e.g. ExponentPushToken[xxx])
+     * @param string|null $pushToken Expo push token (ExponentPushToken[...]) or serialized Web Push JSON ({"endpoint":...})
      * @param string $title Notification title
      * @param string $body Notification body / message
      * @param array $data Custom JSON data payload
@@ -24,6 +26,77 @@ class PushNotificationService
             return ['success' => false, 'error' => 'No push token provided'];
         }
 
+        $trimmed = trim($pushToken);
+
+        // 1. Detect Web Push subscription (JSON object containing 'endpoint')
+        if (str_starts_with($trimmed, '{') && str_contains($trimmed, 'endpoint')) {
+            return static::sendWebPush($pushToken, $title, $body, $data);
+        }
+
+        // 2. Default to Expo Push API for native mobile devices
+        return static::sendExpoPush($pushToken, $title, $body, $data);
+    }
+
+    /**
+     * Dispatch a Web Push notification (VAPID) to a browser PWA subscription.
+     */
+    protected static function sendWebPush(string $subscriptionJson, string $title, string $body, array $data = []): array
+    {
+        try {
+            $subData = json_decode($subscriptionJson, true);
+            if (!is_array($subData) || empty($subData['endpoint'])) {
+                Log::warning("PushNotificationService: Invalid Web Push subscription JSON payload.");
+                return ['success' => false, 'error' => 'Invalid Web Push subscription payload'];
+            }
+
+            $subscription = Subscription::create($subData);
+
+            $auth = [
+                'VAPID' => [
+                    'subject'    => config('services.vapid.subject', 'mailto:vetbookbkpetaholic@gmail.com'),
+                    'publicKey'  => config('services.vapid.public_key'),
+                    'privateKey' => config('services.vapid.private_key'),
+                ],
+            ];
+
+            $webPush = new WebPush($auth);
+
+            $payload = json_encode([
+                'title' => $title,
+                'body'  => $body,
+                'data'  => $data,
+            ]);
+
+            Log::info("PushNotificationService: Dispatching Web Push to " . substr($subscription->getEndpoint(), 0, 45) . '...');
+
+            $report = $webPush->sendOneNotification($subscription, $payload);
+
+            if ($report->isSuccess()) {
+                Log::info("PushNotificationService: Web Push delivered successfully.");
+                return ['success' => true, 'response' => 'Web Push notification delivered'];
+            }
+
+            $reason = $report->getReason();
+            Log::warning("PushNotificationService: Web Push failed: {$reason}");
+
+            // If subscription has expired, unsubscribed, or endpoint is 410/404, purge it from users table
+            if ($report->isSubscriptionExpired()) {
+                User::where('push_token', $subscriptionJson)->update(['push_token' => null]);
+                Log::info("PushNotificationService: Purged expired Web Push subscription from users table.");
+            }
+
+            return ['success' => false, 'error' => $reason];
+        } catch (\Throwable $e) {
+            Log::error("PushNotificationService: WebPush exception: " . $e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Dispatch a native push notification via Expo Push API.
+     */
+    protected static function sendExpoPush(string $pushToken, string $title, string $body, array $data = []): array
+    {
         // Basic sanity check for Expo push token format
         if (!str_starts_with($pushToken, 'ExponentPushToken') && !str_starts_with($pushToken, 'ExpoPushToken')) {
             Log::info("PushNotificationService: non-standard push token format: {$pushToken}");
@@ -41,7 +114,7 @@ class PushNotificationService
         ];
 
         try {
-            Log::info("PushNotificationService: Dispatching push to {$pushToken}", ['title' => $title]);
+            Log::info("PushNotificationService: Dispatching Expo push to {$pushToken}", ['title' => $title]);
 
             $response = Http::withHeaders([
                 'Accept'          => 'application/json',
@@ -56,8 +129,8 @@ class PushNotificationService
 
             if ($response->successful()) {
                 // Expo wraps ticket statuses in {"data": [{"status": "ok"|"error", ...}]}
-                $data = $resBody['data'] ?? [];
-                $firstTicket = is_array($data) && isset($data[0]) ? $data[0] : (is_array($data) ? $data : []);
+                $ticketData = $resBody['data'] ?? [];
+                $firstTicket = is_array($ticketData) && isset($ticketData[0]) ? $ticketData[0] : (is_array($ticketData) ? $ticketData : []);
 
                 if (isset($firstTicket['status']) && $firstTicket['status'] === 'error') {
                     $errType = $firstTicket['details']['error'] ?? 'UnknownTicketError';
@@ -92,4 +165,3 @@ class PushNotificationService
         }
     }
 }
-

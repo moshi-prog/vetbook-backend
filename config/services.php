@@ -49,4 +49,10 @@ return [
         'timeout' => 30,
     ],
 
+    'vapid' => [
+        'public_key'  => env('VAPID_PUBLIC_KEY', 'BIATsLpjsbog2uCxg-6xvWDpWeOjw43B32Ev9BVQobRfMR3Rtf6RttdTv7F2CgpPWupxBfFANST-CrOT52IDjF0'),
+        'private_key' => env('VAPID_PRIVATE_KEY', 'GdOoudWCbmRFBeQWmrvKNeCNJKVpTQQb0lG-SowBJNQ'),
+        'subject'     => env('VAPID_SUBJECT', 'mailto:vetbookbkpetaholic@gmail.com'),
+    ],
+
 ];

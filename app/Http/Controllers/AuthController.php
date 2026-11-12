@@ -513,4 +513,15 @@ class AuthController extends Controller
             'response' => $result['response'] ?? null,
         ], $result['success'] ? 200 : 500);
     }
+
+    /**
+     * Return VAPID public key for Web Push PWA subscriptions.
+     */
+    public function getVapidPublicKey(): JsonResponse
+    {
+        return response()->json([
+            'status'     => 'success',
+            'public_key' => config('services.vapid.public_key'),
+        ]);
+    }
 }
