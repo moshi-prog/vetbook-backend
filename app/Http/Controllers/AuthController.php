@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\PasswordResetMail;
 use App\Mail\VerifyEmailCodeMail;
 use App\Models\EmailVerificationCode;
 use App\Models\User;
 use App\Services\PushNotificationService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
 
@@ -505,6 +509,129 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Password has been reset successfully. You can now log in with your new password.',
         ], 200);
+    }
+
+    /**
+     * Send a password reset link to the user's email.
+     * POST /api/forgot-password
+     */
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => $validator->errors()->first() ?: 'Please enter a valid email address.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $email = mb_strtolower(trim($request->email));
+        $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'If this email is registered, a password reset link has been sent.',
+            ], 200);
+        }
+
+        $token = Str::random(64);
+
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $email],
+            [
+                'token'      => Hash::make($token),
+                'created_at' => now(),
+            ]
+        );
+
+        try {
+            Mail::to($user->email)->send(new PasswordResetMail($token, $email, $user->name ?? 'Pet Owner'));
+        } catch (\Throwable $e) {
+            \Log::error('Failed to send password reset email: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Unable to send reset email right now. Please try again later.',
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'A password reset link has been sent to your email.',
+        ], 200);
+    }
+
+    /**
+     * Show the web password reset form from an email link.
+     * GET /password-reset/{token}
+     */
+    public function showResetForm(Request $request, string $token)
+    {
+        $email = mb_strtolower(trim((string) $request->query('email', '')));
+
+        $record = DB::table('password_reset_tokens')
+            ->where('email', $email)
+            ->first();
+
+        $isValid = $record
+            && Hash::check($token, $record->token)
+            && Carbon::parse($record->created_at)->addMinutes(60)->isFuture();
+
+        if (!$isValid) {
+            return view('auth.reset_password', [
+                'error' => 'Invalid or expired link. Please request a new password reset from the VetBook app.',
+            ]);
+        }
+
+        return view('auth.reset_password', [
+            'token' => $token,
+            'email' => $email,
+        ]);
+    }
+
+    /**
+     * Handle the web password reset form submission.
+     * POST /password-reset
+     */
+    public function handleWebPasswordReset(Request $request)
+    {
+        $request->validate([
+            'token'    => 'required|string',
+            'email'    => 'required|email',
+            'password' => 'required|string|min:6|confirmed',
+        ]);
+
+        $email = mb_strtolower(trim($request->email));
+
+        $record = DB::table('password_reset_tokens')
+            ->where('email', $email)
+            ->first();
+
+        $isValid = $record
+            && Hash::check($request->token, $record->token)
+            && Carbon::parse($record->created_at)->addMinutes(60)->isFuture();
+
+        if (!$isValid) {
+            return view('auth.reset_password', [
+                'error' => 'Invalid or expired link. Please request a new password reset from the VetBook app.',
+            ]);
+        }
+
+        $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
+        if (!$user) {
+            return view('auth.reset_password', [
+                'error' => 'Account not found. Please contact support.',
+            ]);
+        }
+
+        $user->password = Hash::make($request->password);
+        $user->save();
+
+        DB::table('password_reset_tokens')->where('email', $email)->delete();
+
+        return view('auth.reset_password', [
+            'success' => 'Your password has been successfully reset! You can now open the VetBook app and sign in.',
+        ]);
     }
 
     /**

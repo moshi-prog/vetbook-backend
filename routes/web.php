@@ -10,11 +10,16 @@ use App\Http\Controllers\Admin\PetController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\SmsController;
 use App\Http\Controllers\Admin\VeterinarianController;
+use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+// Password reset web routes (for email links)
+Route::get('/password-reset/{token}', [AuthController::class, 'showResetForm'])->name('password.reset');
+Route::post('/password-reset', [AuthController::class, 'handleWebPasswordReset'])->name('password.update');
 
 // Admin authentication routes
 Route::prefix('admin')->name('admin.')->group(function () {
