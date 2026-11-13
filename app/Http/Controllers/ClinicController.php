@@ -128,6 +128,7 @@ class ClinicController extends Controller
             }
 
             $weekdayTimes = $parseTimeRange($savedWeekday ?: $hoursWeekday, '09:00', '18:00');
+            $saturdayTimes = $parseTimeRange($savedSaturday ?: $savedWeekday ?: $hoursWeekday, '09:00', '18:00');
             $sundayTimes = $parseTimeRange($savedSunday ?: $hoursSunday, '10:00', '16:00');
 
             return [
@@ -135,6 +136,9 @@ class ClinicController extends Controller
                 'hoursSunday' => $hoursSunday,
                 'weekday_open' => $weekdayTimes['open'],
                 'weekday_close' => $weekdayTimes['close'],
+                'saturday_open' => $saturdayTimes['is_closed'] ? null : $saturdayTimes['open'],
+                'saturday_close' => $saturdayTimes['is_closed'] ? null : $saturdayTimes['close'],
+                'saturday_closed' => (bool)$saturdayTimes['is_closed'],
                 'sunday_open' => $sundayTimes['is_closed'] ? null : $sundayTimes['open'],
                 'sunday_close' => $sundayTimes['is_closed'] ? null : $sundayTimes['close'],
                 'sunday_closed' => (bool)$sundayTimes['is_closed'],
@@ -154,6 +158,9 @@ class ClinicController extends Controller
                 'hoursSunday' => $mabiniHours['hoursSunday'],
                 'weekday_open' => $mabiniHours['weekday_open'],
                 'weekday_close' => $mabiniHours['weekday_close'],
+                'saturday_open' => $mabiniHours['saturday_open'],
+                'saturday_close' => $mabiniHours['saturday_close'],
+                'saturday_closed' => $mabiniHours['saturday_closed'],
                 'sunday_open' => $mabiniHours['sunday_open'],
                 'sunday_close' => $mabiniHours['sunday_close'],
                 'sunday_closed' => $mabiniHours['sunday_closed'],
@@ -170,6 +177,9 @@ class ClinicController extends Controller
                 'hoursSunday' => $batangasHours['hoursSunday'],
                 'weekday_open' => $batangasHours['weekday_open'],
                 'weekday_close' => $batangasHours['weekday_close'],
+                'saturday_open' => $batangasHours['saturday_open'],
+                'saturday_close' => $batangasHours['saturday_close'],
+                'saturday_closed' => $batangasHours['saturday_closed'],
                 'sunday_open' => $batangasHours['sunday_open'],
                 'sunday_close' => $batangasHours['sunday_close'],
                 'sunday_closed' => $batangasHours['sunday_closed'],
