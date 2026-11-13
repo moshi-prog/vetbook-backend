@@ -586,7 +586,11 @@
                     <label class="f-label">Gateway Provider</label>
                     <div class="f-input d-flex align-items-center justify-content-between bg-white">
                         <span><i class="fas fa-tower-broadcast text-success me-2"></i> {{ $sms['provider'] }}</span>
-                        <span class="badge-pill warning"><i class="fas fa-circle-exclamation"></i> Ready for API Key</span>
+                        @if(!empty($sms['connected']))
+                            <span class="badge-pill success"><i class="fas fa-circle-check"></i> Connected</span>
+                        @else
+                            <span class="badge-pill warning"><i class="fas fa-circle-exclamation"></i> Ready for API Key</span>
+                        @endif
                     </div>
                 </div>
                 <div class="col-md-6">

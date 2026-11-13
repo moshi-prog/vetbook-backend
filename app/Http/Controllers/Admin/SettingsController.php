@@ -134,8 +134,8 @@ class SettingsController extends Controller
         ];
 
         $sms = [
-            'provider' => 'PhilSMS',
-            'connected' => false,
+            'provider' => 'IPROG SMS',
+            'connected' => !empty(config('services.iprogsms.api_token')),
             'templates' => [
                 [
                     'id' => 'confirmation',
