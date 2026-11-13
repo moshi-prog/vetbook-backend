@@ -35,6 +35,12 @@ return [
         ],
     ],
 
+    'iprogsms' => [
+        'base_url' => env('IPROGSMS_BASE_URL', 'https://www.iprogsms.com/api/v1'),
+        'api_token' => env('IPROGSMS_API_TOKEN'),
+        'timeout' => 15,
+    ],
+
     'philsms' => [
         'base_url' => env('PHILSMS_BASE_URL', 'https://dashboard.philsms.com/api/v3'),
         'api_token' => env('PHILSMS_API_TOKEN'),

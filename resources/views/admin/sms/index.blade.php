@@ -214,7 +214,7 @@
     @if($provider['connected'])
         <div class="provider-badge"><span class="provider-dot"></span> {{ $provider['name'] }} — Connected</div>
     @else
-        <div class="provider-badge demo" title="SMS sending is disabled until a PhilSMS API token is configured.">
+        <div class="provider-badge demo" title="SMS sending is disabled until a IPROG SMS API token is configured.">
             <span class="provider-dot"></span> {{ $provider['name'] }} — Not Connected
         </div>
     @endif
@@ -378,7 +378,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="demo-note"><i class="fas fa-circle-info mt-1"></i><span>Sends a real SMS via PhilSMS. Plain ASCII only, max 160 characters (1 credit).</span></div>
+                <div class="demo-note"><i class="fas fa-circle-info mt-1"></i><span>Sends a real SMS via IPROG SMS. Plain ASCII only, max 160 characters (1 credit).</span></div>
                 <div class="mb-3">
                     <label for="composePhone">Recipient phone</label>
                     <input type="text" class="form-control" id="composePhone" name="phone" placeholder="09XXXXXXXXX" required>

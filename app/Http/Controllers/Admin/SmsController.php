@@ -78,8 +78,8 @@ class SmsController extends Controller
         $logs = $query->paginate(20)->withQueryString();
 
         $provider = [
-            'connected' => !empty(config('services.philsms.api_token')),
-            'name' => 'PhilSMS',
+            'connected' => !empty(config('services.iprogsms.api_token')),
+            'name' => 'IPROG SMS',
         ];
 
         $templates = [

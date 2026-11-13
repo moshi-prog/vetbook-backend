@@ -15,13 +15,12 @@ class SMSService
             return ['success' => false, 'message_id' => null, 'error' => 'No phone number provided'];
         }
 
-        $apiToken = config('services.philsms.api_token');
-        $senderId = config('services.philsms.sender_id');
-        $baseUrl = rtrim(config('services.philsms.base_url'), '/');
-        $timeout = config('services.philsms.timeout', 15);
+        $apiToken = config('services.iprogsms.api_token');
+        $baseUrl = rtrim(config('services.iprogsms.base_url', 'https://www.iprogsms.com/api/v1'), '/');
+        $timeout = config('services.iprogsms.timeout', 15);
 
         if (empty($apiToken)) {
-            Log::warning('PhilSMS: API token not configured');
+            Log::warning('IPROG SMS: API token not configured');
             return ['success' => false, 'message_id' => null, 'error' => 'SMS provider not configured'];
         }
 
@@ -42,44 +41,43 @@ class SMSService
 
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $apiToken,
-                'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
             ])
             ->timeout($timeout)
-            ->post($baseUrl . '/sms/send', [
-                'recipient' => $phoneNumber,
-                'sender_id' => $senderId,
+            ->post($baseUrl . '/sms_messages', [
+                'api_token' => $apiToken,
+                'phone_number' => $phoneNumber,
                 'message' => $message,
             ]);
 
             $body = $response->json() ?? [];
 
-            // Some providers answer HTTP 200 with {"status":"error"}; treat that as failed.
-            $bodyStatus = is_array($body) ? ($body['status'] ?? null) : null;
-            $bodyRejected = $bodyStatus !== null && strtolower((string) $bodyStatus) !== 'success';
-
-            if ($response->successful() && !$bodyRejected) {
+            if ($response->successful() && (int) ($body['status'] ?? 0) === 200) {
+                $messageId = $body['message_id'] ?? null;
                 $log->update([
                     'status' => 'delivered',
-                    'provider_message_id' => $body['data']['uid'] ?? $body['message_id'] ?? $body['id'] ?? null,
+                    'provider_message_id' => $messageId,
                 ]);
-                Log::info('PhilSMS: SMS sent', [
+                Log::info('IPROG SMS: SMS sent', [
                     'recipient' => $phoneNumber,
-                    'message_id' => $body['data']['uid'] ?? $body['message_id'] ?? $body['id'] ?? null,
+                    'message_id' => $messageId,
                 ]);
                 return [
                     'success' => true,
-                    'message_id' => $body['data']['uid'] ?? $body['message_id'] ?? $body['id'] ?? null,
+                    'message_id' => $messageId,
                     'error' => null,
                 ];
             }
 
+            $errorMessage = $body['message'] ?? 'SMS provider returned error';
+            $errorText = is_array($errorMessage) ? implode(' ', $errorMessage) : (string) $errorMessage;
+
             $log->update([
                 'status' => 'failed',
-                'error_message' => $body['message'] ?? 'Unknown error',
+                'error_message' => $errorText,
             ]);
-            Log::error('PhilSMS: SMS failed', [
+            Log::error('IPROG SMS: SMS failed', [
                 'status' => $response->status(),
                 'body' => $body,
                 'recipient' => $phoneNumber,
@@ -87,14 +85,14 @@ class SMSService
             return [
                 'success' => false,
                 'message_id' => null,
-                'error' => $body['message'] ?? 'SMS provider returned error',
+                'error' => $errorText,
             ];
         } catch (\Throwable $e) {
             $log->update([
                 'status' => 'failed',
                 'error_message' => $e->getMessage(),
             ]);
-            Log::error('PhilSMS: Exception', ['message' => $e->getMessage()]);
+            Log::error('IPROG SMS: Exception', ['message' => $e->getMessage()]);
             return [
                 'success' => false,
                 'message_id' => null,
