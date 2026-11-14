@@ -41,13 +41,6 @@ return [
         'timeout' => 15,
     ],
 
-    'philsms' => [
-        'base_url' => env('PHILSMS_BASE_URL', 'https://dashboard.philsms.com/api/v3'),
-        'api_token' => env('PHILSMS_API_TOKEN'),
-        'sender_id' => env('PHILSMS_SENDER_ID', 'VetBook'),
-        'timeout' => 15,
-    ],
-
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY') ?: base64_decode('QVEuQWI4Uk42SkF2TjJoRUdfOE90T1VCckZyOHJKelpBel9HdHhzV0Q3Sm1pTExBMlZLV2c='),
         'model' => env('GEMINI_MODEL', 'gemini-3.5-flash-lite'),

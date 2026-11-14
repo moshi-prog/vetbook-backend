@@ -33,8 +33,10 @@ class ChatbotService
 
         // Branch-specific hours (if configured, otherwise fall back to global)
         $mabiniWeekday = ClinicSetting::get('branch_mabini_hours_weekday', $hoursWeekday);
+        $mabiniSaturday = ClinicSetting::get('branch_mabini_hours_saturday', $hoursSaturday);
         $mabiniSunday = ClinicSetting::get('branch_mabini_hours_sunday', $hoursSunday);
         $batangasWeekday = ClinicSetting::get('branch_batangas_hours_weekday', $hoursWeekday);
+        $batangasSaturday = ClinicSetting::get('branch_batangas_hours_saturday', $hoursSaturday);
         $batangasSunday = ClinicSetting::get('branch_batangas_hours_sunday', $hoursSunday);
 
         // 4. Branch Locations & Independent Hotlines
@@ -49,12 +51,14 @@ class ChatbotService
             . "1. Mabini Branch:\n"
             . "   - Address: 142 Mabini St., Poblacion, Mabini, Batangas, Philippines\n"
             . "   - Hotline / Mobile: {$mabiniPhone}\n"
-            . "   - Hours (Monday to Saturday): {$mabiniWeekday}\n"
+            . "   - Hours (Monday to Friday): {$mabiniWeekday}\n"
+            . "   - Hours (Saturday): {$mabiniSaturday}\n"
             . "   - Hours (Sunday): {$mabiniSunday}\n\n"
             . "2. Batangas City Branch:\n"
             . "   - Address: N.F. Almario Bldg, Kumintang Ilaya, Batangas City, Batangas, Philippines\n"
             . "   - Hotline / Mobile: {$batangasPhone}\n"
-            . "   - Hours (Monday to Saturday): {$batangasWeekday}\n"
+            . "   - Hours (Monday to Friday): {$batangasWeekday}\n"
+            . "   - Hours (Saturday): {$batangasSaturday}\n"
             . "   - Hours (Sunday): {$batangasSunday}\n\n"
             . "General Support Hotline: {$clinicPhone} | Email: {$clinicEmail}\n\n"
             . "SERVICES OFFERED:\n"
