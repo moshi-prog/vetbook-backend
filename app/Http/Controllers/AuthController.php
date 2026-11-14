@@ -414,9 +414,15 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $user->name = $request->name;
-        $user->phone_number = $request->phone_number;
+        $existingAvatar = $user->avatar_url;
+
+        $user->name = trim($request->name);
+        $user->phone_number = trim($request->phone_number);
+        if (empty($user->avatar_url) && !empty($existingAvatar)) {
+            $user->avatar_url = $existingAvatar;
+        }
         $user->save();
+        $user->refresh();
 
         return response()->json([
             'message' => 'Profile updated successfully.',

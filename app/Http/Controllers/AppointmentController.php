@@ -48,6 +48,41 @@ class AppointmentController extends Controller
     }
 
     /**
+     * Return already-booked HH:MM slots for a branch and date.
+     *
+     * GET /api/appointments/booked-slots
+     */
+    public function getBookedSlots(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'branch' => 'required|string',
+            'date'   => 'required|date',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $date = \Carbon\Carbon::parse($request->date)->toDateString();
+
+        $booked = Appointment::where('branch', $request->branch)
+            ->whereDate('appointment_date', $date)
+            ->whereIn('status', self::ACTIVE_STATUSES)
+            ->pluck('appointment_time')
+            ->map(fn ($time) => substr((string) $time, 0, 5))
+            ->unique()
+            ->values();
+
+        return response()->json([
+            'status'       => 'success',
+            'booked_slots' => $booked,
+        ]);
+    }
+
+    /**
      * Book a new appointment for one of the authenticated user's pets.
      *
      * POST /api/appointments

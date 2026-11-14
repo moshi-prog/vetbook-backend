@@ -12,7 +12,7 @@
     $seed = mb_strtolower(($owner->email ?? '') . '|' . ($owner->name ?? ''));
     [$ownerBg, $ownerFg] = $ownerPalette[crc32($seed) % count($ownerPalette)];
     $avatarSrc = ($owner->avatar_url ?? null)
-        ? (\Illuminate\Support\Str::startsWith($owner->avatar_url, ['http://', 'https://', '//'])
+        ? (\Illuminate\Support\Str::startsWith($owner->avatar_url, ['http://', 'https://', '//', 'data:image/'])
             ? $owner->avatar_url
             : asset('storage/' . ltrim($owner->avatar_url, '/')))
         : null;

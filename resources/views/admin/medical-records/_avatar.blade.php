@@ -9,7 +9,7 @@
     ];
     [$avBg, $avFg] = $avatarPalette[strtolower((string) ($pet->species ?? ''))] ?? ['#EAE6DE', '#4A4E4A'];
     $avatarSrc = ($pet->avatar_url ?? null)
-        ? (\Illuminate\Support\Str::startsWith($pet->avatar_url, ['http://', 'https://', '//'])
+        ? (\Illuminate\Support\Str::startsWith($pet->avatar_url, ['http://', 'https://', '//', 'data:image/'])
             ? $pet->avatar_url
             : asset('storage/' . ltrim($pet->avatar_url, '/')))
         : null;

@@ -29,8 +29,9 @@ Route::post('/verify-email',            [AuthController::class, 'verifyEmail']);
 Route::post('/resend-verification-code',[AuthController::class, 'resendVerificationCode']);
 Route::post('/forgot-password',         [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password',          [AuthController::class, 'resetPassword']);
-Route::get('/branches',        [ClinicController::class, 'getBranches']);
-Route::get('/clinic',          [ClinicController::class, 'getClinicInfo']);
+Route::get('/branches',                   [ClinicController::class, 'getBranches']);
+Route::get('/appointments/booked-slots',  [AppointmentController::class, 'getBookedSlots']);
+Route::get('/clinic',                     [ClinicController::class, 'getClinicInfo']);
 Route::get('/push/vapid-key',  [AuthController::class, 'getVapidPublicKey']);
 
 // -------------------------------------------------------------------------

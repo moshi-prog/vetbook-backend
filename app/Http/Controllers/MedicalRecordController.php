@@ -11,8 +11,21 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 
 class MedicalRecordController extends Controller
 {
+    private const STAFF_ROLES = ['admin', 'veterinarian'];
+
+    private function authorizeClinicStaff($user, string $actionVerb): ?JsonResponse
+    {
+        if (!in_array($user->role, self::STAFF_ROLES, true)) {
+            return response()->json([
+                'message' => "Unauthorized. Only veterinarians or clinic staff may {$actionVerb} medical records.",
+            ], 403);
+        }
+
+        return null;
+    }
+
     /**
-     * Return all medical records for a pet (pet must belong to the user).
+     * Return all medical records for a pet (owner or clinic staff).
      *
      * GET /api/pets/{petId}/medical-records
      */
@@ -26,7 +39,7 @@ class MedicalRecordController extends Controller
             return response()->json(['message' => 'Pet not found'], 404);
         }
 
-        if ((int) $pet->user_id !== (int) $user->id) {
+        if ((int) $pet->user_id !== (int) $user->id && !in_array($user->role, self::STAFF_ROLES, true)) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -40,7 +53,7 @@ class MedicalRecordController extends Controller
     }
 
     /**
-     * Add a medical record to a pet (pet must belong to the user).
+     * Add a medical record to a pet (clinic staff only).
      *
      * POST /api/pets/{petId}/medical-records
      */
@@ -48,14 +61,14 @@ class MedicalRecordController extends Controller
     {
         $user = JWTAuth::parseToken()->authenticate();
 
+        if ($denied = $this->authorizeClinicStaff($user, 'create')) {
+            return $denied;
+        }
+
         $pet = Pet::find($petId);
 
         if (! $pet) {
             return response()->json(['message' => 'Pet not found'], 404);
-        }
-
-        if ((int) $pet->user_id !== (int) $user->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
         }
 
         $validator = Validator::make($request->all(), [
@@ -95,7 +108,7 @@ class MedicalRecordController extends Controller
     }
 
     /**
-     * Return a single medical record (its pet must belong to the user).
+     * Return a single medical record (owner or clinic staff).
      *
      * GET /api/medical-records/{id}
      */
@@ -109,7 +122,7 @@ class MedicalRecordController extends Controller
             return response()->json(['message' => 'Medical record not found'], 404);
         }
 
-        if ((int) $record->pet->user_id !== (int) $user->id) {
+        if ((int) $record->pet->user_id !== (int) $user->id && !in_array($user->role, self::STAFF_ROLES, true)) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -117,7 +130,7 @@ class MedicalRecordController extends Controller
     }
 
     /**
-     * Update a medical record (all fields optional on update).
+     * Update a medical record (clinic staff only; all fields optional on update).
      *
      * PUT /api/medical-records/{id}
      */
@@ -125,14 +138,14 @@ class MedicalRecordController extends Controller
     {
         $user = JWTAuth::parseToken()->authenticate();
 
+        if ($denied = $this->authorizeClinicStaff($user, 'modify')) {
+            return $denied;
+        }
+
         $record = MedicalRecord::with('pet')->find($id);
 
         if (! $record) {
             return response()->json(['message' => 'Medical record not found'], 404);
-        }
-
-        if ((int) $record->pet->user_id !== (int) $user->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
         }
 
         // If consultation_date isn't being changed, compare next_visit_date

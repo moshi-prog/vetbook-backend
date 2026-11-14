@@ -397,7 +397,7 @@
                             [$pillBg, $pillFg, $pillIcon, $avBg, $avFg] = $styleFor($pet->species);
                             $seenAt = $pet->appointments->pluck('branch')->filter()->unique()->values();
                             $avatarSrc = $pet->avatar_url
-                                ? (\Illuminate\Support\Str::startsWith($pet->avatar_url, ['http://', 'https://', '//'])
+                                ? (\Illuminate\Support\Str::startsWith($pet->avatar_url, ['http://', 'https://', '//', 'data:image/'])
                                     ? $pet->avatar_url
                                     : asset('storage/' . ltrim($pet->avatar_url, '/')))
                                 : null;

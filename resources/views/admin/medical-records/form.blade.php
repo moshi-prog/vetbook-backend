@@ -139,8 +139,8 @@
         <div class="form-actions">
             <a href="{{ $record ? route('admin.medical-records.show', $record->id) : route('admin.medical-records.index') }}"
                class="btn-soft">Cancel</a>
-            <button type="submit" class="btn-green">
-                <i class="fas fa-floppy-disk"></i> {{ $record ? 'Save Changes' : 'Save Record' }}
+            <button type="submit" class="btn-green" id="saveRecordBtn" onclick="if(this.form.checkValidity()){ this.disabled=true; this.innerHTML='<i class=\'fas fa-spinner fa-spin me-1\'></i> Saving...'; this.form.submit(); }">
+                <i class="fas fa-check"></i> {{ $record ? 'Update Medical Record' : 'Save Medical Record' }}
             </button>
         </div>
     </div>
