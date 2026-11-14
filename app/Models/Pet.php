@@ -15,6 +15,7 @@ class Pet extends Model
         'gender',
         'weight',
         'medical_conditions',
+        'health_status',
         'avatar_url',
     ];
 
@@ -39,5 +40,29 @@ class Pet extends Model
     public function appointments()
     {
         return $this->hasMany(Appointment::class);
+    }
+
+    /**
+     * Clinic-controlled health status badge metadata for admin views.
+     */
+    public function healthBadge(): array
+    {
+        if (($this->health_status ?? 'healthy') === 'attention') {
+            return [
+                'is_attention' => true,
+                'label'        => 'Needs Attention',
+                'bg'           => '#FFF4E5',
+                'color'        => '#B26B00',
+                'icon'         => 'fa-exclamation-circle',
+            ];
+        }
+
+        return [
+            'is_attention' => false,
+            'label'        => 'Healthy',
+            'bg'           => '#E8F5E9',
+            'color'        => '#2E7D32',
+            'icon'         => 'fa-check-circle',
+        ];
     }
 }

@@ -110,6 +110,21 @@ class PetController extends Controller
         return view('admin.pets.show', compact('pet'));
     }
 
+    public function updateHealthStatus(Request $request, $id)
+    {
+        $request->validate([
+            'health_status' => 'required|in:healthy,attention',
+        ]);
+
+        $pet = Pet::findOrFail($id);
+        $pet->health_status = $request->health_status;
+        $pet->save();
+
+        $label = $pet->healthBadge()['label'];
+
+        return back()->with('success', "Pet health status updated to {$label}.");
+    }
+
     public function destroy($id)
     {
         $pet = Pet::findOrFail($id);

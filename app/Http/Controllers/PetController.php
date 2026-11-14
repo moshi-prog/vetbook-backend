@@ -73,6 +73,8 @@ class PetController extends Controller
             'gender'             => $request->gender,
             'weight'             => $request->weight,
             'medical_conditions' => $request->medical_conditions,
+            // Health status is controlled strictly by clinic administrators.
+            'health_status'      => 'healthy',
             'avatar_url'         => $avatarUrl,
         ]);
 

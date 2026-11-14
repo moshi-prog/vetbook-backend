@@ -317,6 +317,24 @@
                     <i class="fas fa-paw"></i> {{ $pet->breed }}
                 </span>
             @endif
+            {{-- Admin Health Status Control --}}
+            @php
+                $healthBadge = $pet->healthBadge();
+                $isAttention = $healthBadge['is_attention'];
+            @endphp
+            <form action="{{ route('admin.pets.update-health-status', $pet->id) }}" method="POST" class="d-inline-flex align-items-center m-0" id="adminHealthForm">
+                @csrf
+                <div class="badge-chip" style="background: {{ $healthBadge['bg'] }}; color: {{ $healthBadge['color'] }}; padding: 4px 10px; border: 1px solid {{ $healthBadge['color'] }}30;">
+                    <i class="fas {{ $healthBadge['icon'] }} me-1"></i>
+                    <select name="health_status" id="adminHealthSelect"
+                            onchange="this.form.submit()"
+                            aria-label="Official Clinic Health Status"
+                            style="background: transparent; border: none; color: inherit; font-weight: 700; font-size: 13px; cursor: pointer; outline: none; padding-right: 4px;">
+                        <option value="healthy" {{ !$isAttention ? 'selected' : '' }} style="color: #2E7D32; background: #fff;">Healthy</option>
+                        <option value="attention" {{ $isAttention ? 'selected' : '' }} style="color: #B26B00; background: #fff;">Needs Attention</option>
+                    </select>
+                </div>
+            </form>
         </div>
         <div style="font-family: 'Nunito Sans', sans-serif; font-size: 14px; color: #6B6358;">
             Owner:

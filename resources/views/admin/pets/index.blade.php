@@ -384,6 +384,7 @@
                         </th>
                         <th>Pet</th>
                         <th>Species / Breed</th>
+                        <th>Health Status</th>
                         <th>Owner</th>
                         <th>Age / Gender</th>
                         <th>Seen At</th>
@@ -427,6 +428,12 @@
                                     <i class="fas {{ $pillIcon }}"></i> {{ $pet->species ?: 'Other' }}
                                 </span>
                                 <div class="pet-sub mt-1">{{ $pet->breed ?: 'Breed not specified' }}</div>
+                            </td>
+                            @php($healthBadge = $pet->healthBadge())
+                            <td>
+                                <span class="species-pill" style="background: {{ $healthBadge['bg'] }}; color: {{ $healthBadge['color'] }};">
+                                    <i class="fas {{ $healthBadge['icon'] }}"></i> {{ $healthBadge['label'] }}
+                                </span>
                             </td>
                             <td>
                                 <div style="font-weight: 600;">{{ $pet->owner->name ?? 'Unknown' }}</div>

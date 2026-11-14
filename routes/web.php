@@ -49,6 +49,7 @@ Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {
     Route::get('/pets/export', [PetController::class, 'export'])->name('pets.export');
     Route::match(['post', 'delete'], '/pets/bulk-delete', [PetController::class, 'bulkDestroy'])->name('pets.bulk-delete');
     Route::get('/pets/{id}', [PetController::class, 'show'])->name('pets.show');
+    Route::post('/pets/{id}/health-status', [PetController::class, 'updateHealthStatus'])->name('pets.update-health-status');
     Route::delete('/pets/{id}', [PetController::class, 'destroy'])->name('pets.destroy');
 
     // Medical records (static paths must be declared before /{id})
