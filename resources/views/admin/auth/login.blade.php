@@ -32,16 +32,49 @@
             padding: 20px;
             margin: 0;
             color: #4A453E;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* ── Scattered Paws & Doodles Background (Design A) ── */
+        .bg-decorations {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .bg-paw {
+            position: absolute;
+            color: #4A7C59;
+            user-select: none;
+        }
+
+        .bg-paw-amber {
+            position: absolute;
+            color: #EAA03B;
+            user-select: none;
+        }
+
+        .bg-doodle {
+            position: absolute;
+            color: #78A886;
+            user-select: none;
+            font-family: monospace;
         }
 
         .login-card {
-            background: #FFFFFF;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
             width: 100%;
             max-width: 420px;
             border-radius: 20px;
-            box-shadow: 0 12px 36px rgba(74, 124, 89, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+            box-shadow: 0 16px 40px rgba(74, 124, 89, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04);
             overflow: hidden;
-            border: 1px solid rgba(220, 215, 205, 0.6);
+            border: 1px solid rgba(220, 215, 205, 0.8);
+            position: relative;
+            z-index: 10;
         }
 
         .decorative-bar {
@@ -225,6 +258,28 @@
     </style>
 </head>
 <body>
+
+<!-- ── Design A: Scattered Paws & Doodles Background ── -->
+<div class="bg-decorations" aria-hidden="true">
+    <!-- Top Left Cluster -->
+    <i class="fa-solid fa-paw bg-paw" style="top: 8%; left: 5%; font-size: 5.5rem; opacity: 0.16; transform: rotate(-18deg);"></i>
+    <i class="fa-solid fa-wand-magic-sparkles bg-paw-amber" style="top: 24%; left: 13%; font-size: 1.6rem; opacity: 0.45; transform: rotate(15deg);"></i>
+    <span class="bg-doodle" style="top: 38%; left: 4%; font-size: 1.8rem; opacity: 0.25; transform: rotate(-10deg);">&#x2248; &#x2248;</span>
+
+    <!-- Top Right Cluster -->
+    <i class="fa-solid fa-paw bg-paw-amber" style="top: 10%; right: 7%; font-size: 4.8rem; opacity: 0.32; transform: rotate(24deg);"></i>
+    <i class="fa-regular fa-heart bg-doodle" style="top: 25%; right: 15%; font-size: 1.8rem; opacity: 0.35; transform: rotate(-12deg);"></i>
+    <span class="bg-doodle" style="top: 42%; right: 5%; font-size: 1.8rem; opacity: 0.25; transform: rotate(12deg);">&#x2248; &#x2248;</span>
+
+    <!-- Bottom Left Cluster -->
+    <i class="fa-solid fa-paw bg-paw" style="bottom: 10%; left: 7%; font-size: 6.5rem; opacity: 0.15; transform: rotate(35deg);"></i>
+    <i class="fa-regular fa-heart bg-paw-amber" style="bottom: 28%; left: 15%; font-size: 1.5rem; opacity: 0.4; transform: rotate(18deg);"></i>
+
+    <!-- Bottom Right Cluster -->
+    <i class="fa-solid fa-paw bg-paw" style="bottom: 8%; right: 6%; font-size: 5.5rem; opacity: 0.18; transform: rotate(-25deg);"></i>
+    <i class="fa-solid fa-paw bg-paw-amber" style="bottom: 24%; right: 13%; font-size: 3.8rem; opacity: 0.32; transform: rotate(12deg);"></i>
+    <i class="fa-solid fa-wand-magic-sparkles bg-doodle" style="bottom: 40%; right: 8%; font-size: 1.4rem; opacity: 0.35;"></i>
+</div>
 
 <div class="login-card">
     <div class="decorative-bar"></div>
