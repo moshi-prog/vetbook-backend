@@ -50,8 +50,8 @@
                 Medical Record #{{ $record->id }}
             </h2>
             <p class="mr-subtitle">
-                Consultation on {{ $record->consultation_date->format('F j, Y') }}
-                &middot; Recorded {{ $record->created_at->format('M d, Y g:i A') }}
+                Consultation on {{ $record->consultation_date?->format('F j, Y') ?? '—' }}
+                &middot; Recorded {{ $record->created_at?->format('M d, Y g:i A') ?? '—' }}
             </p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
@@ -112,7 +112,7 @@
             @if(!empty($record->veterinarian) && $record->veterinarian !== 'Clinic Staff')
                 <div class="info-row"><div class="k">Vet</div><div class="v">{{ $record->veterinarian }}</div></div>
             @endif
-            <div class="info-row"><div class="k">Date</div><div class="v">{{ $record->consultation_date->format('M d, Y') }}</div></div>
+            <div class="info-row"><div class="k">Date</div><div class="v">{{ $record->consultation_date?->format('M d, Y') ?? '—' }}</div></div>
             <div class="info-row">
                 <div class="k">Next visit</div>
                 <div class="v">

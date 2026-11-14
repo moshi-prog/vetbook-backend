@@ -158,15 +158,16 @@ class AppointmentController extends Controller
             'notes'            => $request->notes,
         ]);
 
+        $formattedDate = \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y');
+        $formattedTime = Appointment::format12Hour($appointment->appointment_time);
+
         // Send SMS acknowledgment to pet owner
         if ($appointment->user && !empty($appointment->user->phone_number)) {
             try {
                 $appointment->load(['pet', 'user']);
                 $smsResult = \App\Services\SMSService::send(
                     $appointment->user->phone_number,
-                    "BK Petaholic: Booking for {$appointment->pet->name} on "
-                    . \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y')
-                    . " {$appointment->appointment_time} received. "
+                    "BK Petaholic: Booking for {$appointment->pet->name} on {$formattedDate} at {$formattedTime} received. "
                     . "We will text you once confirmed.",
                     [
                         'user_id' => $appointment->user_id,
@@ -192,11 +193,10 @@ class AppointmentController extends Controller
 
         // Create In-App Notification for Pet Owner
         try {
-            $formattedDate = \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y');
             AppNotification::create([
                 'user_id' => $user->id,
                 'title'   => 'Booking Submitted',
-                'message' => "Your appointment request for {$pet->name} on {$formattedDate} at {$appointment->appointment_time} has been received and is awaiting clinic confirmation.",
+                'message' => "Your appointment request for {$pet->name} on {$formattedDate} at {$formattedTime} has been received and is awaiting clinic confirmation.",
                 'type'    => 'appointment_booked',
                 'data'    => [
                     'appointment_id' => $appointment->id,
@@ -215,7 +215,7 @@ class AppointmentController extends Controller
                 AppNotification::create([
                     'user_id' => $admin->id,
                     'title'   => 'New Appointment Booked',
-                    'message' => "{$user->name} booked an appointment for {$pet->name} on {$formattedDate} at {$appointment->appointment_time} ({$appointment->branch}).",
+                    'message' => "{$user->name} booked an appointment for {$pet->name} on {$formattedDate} at {$formattedTime} ({$appointment->branch}).",
                     'type'    => 'appointment_booked',
                     'data'    => [
                         'appointment_id' => $appointment->id,
@@ -312,13 +312,19 @@ class AppointmentController extends Controller
             ], 422);
         }
 
+        $oldDate = !empty($appointment->appointment_date)
+            ? \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y')
+            : 'N/A';
+        $oldTime = Appointment::format12Hour($appointment->appointment_time);
+
         $appointment->appointment_date = $request->appointment_date;
         $appointment->appointment_time = $request->appointment_time;
         // Keep or reset to pending so clinic is aware of changes
         $appointment->status = Appointment::STATUS_PENDING;
 
-        $formattedDate = \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y');
-        $rescheduleTag = "[Rescheduled by Pet Owner] New schedule: {$formattedDate} at {$appointment->appointment_time}";
+        $newDate = \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y');
+        $newTime = Appointment::format12Hour($appointment->appointment_time);
+        $rescheduleTag = "[Rescheduled by Pet Owner] Previous: {$oldDate} at {$oldTime} -> New: {$newDate} at {$newTime}";
         $appointment->notes = $appointment->notes ? ($appointment->notes . "\n\n" . $rescheduleTag) : $rescheduleTag;
 
         $appointment->save();
@@ -332,11 +338,15 @@ class AppointmentController extends Controller
             AppNotification::create([
                 'user_id' => $appointment->user_id,
                 'title'   => 'Reschedule Request Pending',
-                'message' => "You requested to reschedule {$petName}'s visit to {$formattedDate} at {$appointment->appointment_time}. Please wait for the clinic admin to approve your new schedule.",
+                'message' => "You requested to reschedule {$petName}'s visit to {$newDate} at {$newTime} (previously {$oldDate} at {$oldTime}). Please wait for the clinic admin to approve your new schedule.",
                 'type'    => 'appointment_reschedule_pending',
                 'data'    => [
                     'appointment_id' => $appointment->id,
                     'pet_id'         => $appointment->pet_id,
+                    'old_date'       => $oldDate,
+                    'old_time'       => $oldTime,
+                    'new_date'       => $newDate,
+                    'new_time'       => $newTime,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -353,7 +363,7 @@ class AppointmentController extends Controller
                 })
                 ->get();
 
-            $adminMessage = "{$ownerName} rescheduled their appointment for {$petName} to {$formattedDate} at {$appointment->appointment_time}.";
+            $adminMessage = "{$ownerName} rescheduled their appointment for {$petName} to {$newDate} at {$newTime} (previously {$oldDate} at {$oldTime}).";
 
             foreach ($admins as $admin) {
                 AppNotification::create([
@@ -468,9 +478,21 @@ class AppointmentController extends Controller
             \Log::warning('AppNotification admin cancel notification failed: ' . $e->getMessage());
         }
 
-        // Send Cancellation SMS Notification
+        // Send Owner Cancellation Confirmation SMS Notification
         try {
-            app(\App\Services\SMSService::class)->sendAppointmentCancellation($appointment);
+            $phone = $appointment->user?->phone_number;
+            if ($phone) {
+                $smsOwnerName = $appointment->user?->name ?: $ownerName;
+                \App\Services\SMSService::send(
+                    $phone,
+                    "Hi {$smsOwnerName}, your appointment for {$petName} on {$formattedDate} has been cancelled as requested. — BK Petaholic",
+                    [
+                        'user_id' => $appointment->user_id,
+                        'appointment_id' => $appointment->id,
+                        'type' => 'cancellation',
+                    ]
+                );
+            }
         } catch (\Throwable $e) {
             \Log::warning('SMS cancellation notification failed: ' . $e->getMessage());
         }

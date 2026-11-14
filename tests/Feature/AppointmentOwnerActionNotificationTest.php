@@ -159,8 +159,9 @@ class AppointmentOwnerActionNotificationTest extends TestCase
         $freshAppt = $appointment->fresh();
         $this->assertEquals($newTime, $freshAppt->appointment_time);
         $this->assertEquals('pending', $freshAppt->status);
-        $this->assertStringContainsString('[Rescheduled by Pet Owner] New schedule:', $freshAppt->notes);
-        $this->assertStringContainsString($newTime, $freshAppt->notes);
+        $this->assertStringContainsString('[Rescheduled by Pet Owner] Previous:', $freshAppt->notes);
+        $this->assertStringContainsString('9:00 AM -> New:', $freshAppt->notes);
+        $this->assertStringContainsString('2:30 PM', $freshAppt->notes);
 
         // Verify In-App Notification for pet owner
         $ownerNotification = AppNotification::where('user_id', $owner->id)
@@ -169,6 +170,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
         $this->assertNotNull($ownerNotification);
         $this->assertEquals('Reschedule Request Pending', $ownerNotification->title);
         $this->assertStringContainsString("You requested to reschedule Hero's visit", $ownerNotification->message);
+        $this->assertStringContainsString('2:30 PM', $ownerNotification->message);
         $this->assertStringContainsString("Please wait for the clinic admin to approve your new schedule.", $ownerNotification->message);
 
         // Verify Super Admin received notification
@@ -177,7 +179,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
             ->first();
         $this->assertNotNull($superNotification);
         $this->assertStringContainsString('Juan Luna rescheduled their appointment for Hero', $superNotification->message);
-        $this->assertStringContainsString($newTime, $superNotification->message);
+        $this->assertStringContainsString('2:30 PM', $superNotification->message);
 
         // Verify Mabini Branch Admin received notification
         $mabiniNotification = AppNotification::where('user_id', $mabiniAdmin->id)
@@ -297,7 +299,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
         $response = $this->actingAs($superAdmin)
             ->post("/admin/appointments/{$appointment->id}/reschedule", [
                 'appointment_date' => $newDate,
-                'appointment_time' => '03:00 PM',
+                'appointment_time' => '15:00',
             ]);
 
         $response->assertStatus(302);
@@ -309,6 +311,8 @@ class AppointmentOwnerActionNotificationTest extends TestCase
         $this->assertNotNull($notification);
         $this->assertEquals('Appointment Rescheduled by Clinic', $notification->title);
         $this->assertStringContainsString("BK Petaholic Clinic has updated Hero's appointment to", $notification->message);
+        $this->assertStringContainsString('3:00 PM', $notification->message);
+        $this->assertStringContainsString('10:00 AM', $notification->message);
     }
 
     public function test_admin_cancelling_creates_cancelled_by_clinic_notification(): void
@@ -399,6 +403,30 @@ class AppointmentOwnerActionNotificationTest extends TestCase
         $response->assertSee('Cancellation Information');
         $response->assertSee('[Cancelled by Pet Owner] Reason: Schedule conflict');
         $response->assertSee('fa-ban');
+        $response->assertDontSee('The pet owner will not be notified automatically.');
+    }
+
+    public function test_appointment_details_cancel_modal_states_owner_will_be_notified(): void
+    {
+        [$superAdmin] = $this->createAdmins();
+        [$owner, $pet] = $this->createPetOwner();
+
+        $appointment = Appointment::create([
+            'user_id' => $owner->id,
+            'pet_id' => $pet->id,
+            'branch' => 'Mabini Branch',
+            'appointment_date' => now()->addDays(3)->toDateString(),
+            'appointment_time' => '10:00 AM',
+            'status' => 'approved',
+            'reason' => 'Checkup',
+        ]);
+
+        $response = $this->actingAs($superAdmin)
+            ->get("/admin/appointments/{$appointment->id}");
+
+        $response->assertStatus(200);
+        $response->assertSee('The pet owner will automatically receive an in-app alert, push notification, and SMS with your reason.');
+        $response->assertDontSee('The pet owner will not be notified automatically.');
     }
 }
 

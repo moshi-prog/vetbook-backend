@@ -185,7 +185,7 @@ class AdminAlertsDeletesPushAndDynamicHoursTest extends TestCase
         // 2. Reschedule appointment
         $this->actingAs($admin)->post("/admin/appointments/{$appointment->id}/reschedule", [
             'appointment_date' => now()->addDays(4)->toDateString(),
-            'appointment_time' => '02:00 PM',
+            'appointment_time' => '14:00',
         ]);
 
         Http::assertSent(function ($request) use ($owner) {

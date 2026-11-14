@@ -27,23 +27,28 @@ class ChatbotService
         $clinicEmail = ClinicSetting::get('clinic_email', 'info@bkpetaholic.com');
 
         // 3. Dynamic Operating Hours from clinic_settings
-        $hoursWeekday = ClinicSetting::get('hours_weekday', '9:00 AM - 6:00 PM');
-        $hoursSaturday = ClinicSetting::get('hours_saturday', '9:00 AM - 6:00 PM');
-        $hoursSunday = ClinicSetting::get('hours_sunday', '10:00 AM - 4:00 PM');
+        $hoursWeekday = ClinicSetting::get('clinic_hours_weekday') ?: ClinicSetting::get('hours_weekday', '9:00 AM - 6:00 PM');
+        $hoursSaturday = ClinicSetting::get('clinic_hours_saturday') ?: ClinicSetting::get('hours_saturday', '9:00 AM - 6:00 PM');
+        $hoursSunday = ClinicSetting::get('clinic_hours_sunday') ?: ClinicSetting::get('hours_sunday', '10:00 AM - 4:00 PM');
 
         // Branch-specific hours (if configured, otherwise fall back to global)
-        $mabiniWeekday = ClinicSetting::get('branch_mabini_hours_weekday', $hoursWeekday);
-        $mabiniSaturday = ClinicSetting::get('branch_mabini_hours_saturday', $hoursSaturday);
-        $mabiniSunday = ClinicSetting::get('branch_mabini_hours_sunday', $hoursSunday);
-        $batangasWeekday = ClinicSetting::get('branch_batangas_hours_weekday', $hoursWeekday);
-        $batangasSaturday = ClinicSetting::get('branch_batangas_hours_saturday', $hoursSaturday);
-        $batangasSunday = ClinicSetting::get('branch_batangas_hours_sunday', $hoursSunday);
+        $mabiniWeekday = ClinicSetting::get('branch_mabini_hours_weekday') ?: $hoursWeekday;
+        $mabiniSaturday = ClinicSetting::get('branch_mabini_hours_saturday') ?: $hoursSaturday;
+        $mabiniSunday = ClinicSetting::get('branch_mabini_hours_sunday') ?: $hoursSunday;
+        $batangasWeekday = ClinicSetting::get('branch_batangas_hours_weekday') ?: $hoursWeekday;
+        $batangasSaturday = ClinicSetting::get('branch_batangas_hours_saturday') ?: $hoursSaturday;
+        $batangasSunday = ClinicSetting::get('branch_batangas_hours_sunday') ?: $hoursSunday;
 
         // 4. Branch Locations & Independent Hotlines
         $mabiniPhone = ClinicSetting::get('branch_mabini_phone', '0917-123-4567');
         $batangasPhone = ClinicSetting::get('branch_batangas_phone', '0918-765-4321');
 
-        $prompt = "You are VetBook Assistant, the warm, helpful AI companion for {$clinicName} ({$clinicTagline}).\n\n"
+        $customSystemPrompt = trim((string) ClinicSetting::get('chatbot_system_prompt', ''));
+        $introSection = $customSystemPrompt !== ''
+            ? $customSystemPrompt . "\n\nOFFICIAL CLINIC IDENTITY: {$clinicName} ({$clinicTagline})."
+            : "You are VetBook Assistant, the warm, helpful AI companion for {$clinicName} ({$clinicTagline}).";
+
+        $prompt = "{$introSection}\n\n"
             . "CURRENT TIME & DATE:\n"
             . "• Current Philippine Standard Time: {$currentDateTimeStr} (Today is {$currentDay}).\n"
             . "• Use this current time to determine if a branch is currently open or closed when the user asks.\n\n"

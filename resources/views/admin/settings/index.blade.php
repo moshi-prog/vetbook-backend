@@ -419,24 +419,28 @@
                 </div>
             </div>
 
-            @if(auth()->user()->branch !== null)
-                <hr class="my-4" style="border-color: #EAE6DE;">
+            <hr class="my-4" style="border-color: #EAE6DE;">
 
-                <h4 class="section-title mb-3" style="font-size: 16px;"><i class="fas fa-clock text-success"></i> {{ auth()->user()->branch }} Operating Schedule</h4>
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="f-label">Monday – Friday</label>
-                        <input type="text" name="hours_weekday" class="f-input" value="{{ $clinic['hours_weekday'] }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="f-label">Saturday</label>
-                        <input type="text" name="hours_saturday" class="f-input" value="{{ $clinic['hours_saturday'] }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="f-label">Sunday</label>
-                        <input type="text" name="hours_sunday" class="f-input" value="{{ $clinic['hours_sunday'] }}">
-                    </div>
+            <h4 class="section-title mb-3" style="font-size: 16px;">
+                <i class="fas fa-clock text-success"></i>
+                {{ auth()->user()->branch ? auth()->user()->branch . ' Operating Schedule' : 'Clinic-Wide Operating Schedule' }}
+            </h4>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="f-label">Monday – Friday</label>
+                    <input type="text" name="hours_weekday" class="f-input" value="{{ $clinic['hours_weekday'] }}">
                 </div>
+                <div class="col-md-4">
+                    <label class="f-label">Saturday</label>
+                    <input type="text" name="hours_saturday" class="f-input" value="{{ $clinic['hours_saturday'] }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="f-label">Sunday</label>
+                    <input type="text" name="hours_sunday" class="f-input" value="{{ $clinic['hours_sunday'] }}">
+                </div>
+            </div>
+            @if(auth()->user()->branch === null)
+                <div class="f-help mt-2">Changes here update default operating hours across both branches unless overridden by a branch administrator.</div>
             @endif
 
             <div class="text-end mt-4">
@@ -797,16 +801,16 @@
                 <div class="col-md-6">
                     <label class="f-label">System Timezone</label>
                     <select name="timezone" class="f-select">
-                        <option value="Asia/Manila" selected>Asia/Manila (GMT+8:00)</option>
-                        <option value="UTC">UTC (Universal Time)</option>
+                        <option value="Asia/Manila" @selected(($preferences['timezone'] ?? 'Asia/Manila') === 'Asia/Manila')>Asia/Manila (GMT+8:00)</option>
+                        <option value="UTC" @selected(($preferences['timezone'] ?? 'Asia/Manila') === 'UTC')>UTC (Universal Time)</option>
                     </select>
                 </div>
                 <div class="col-md-6">
                     <label class="f-label">Standard Date Format</label>
                     <select name="date_format" class="f-select">
-                        <option value="F j, Y" selected>October 13, 2026 (Month D, YYYY)</option>
-                        <option value="m/d/Y">10/13/2026 (MM/DD/YYYY)</option>
-                        <option value="d/m/Y">13/10/2026 (DD/MM/YYYY)</option>
+                        <option value="F j, Y" @selected(($preferences['date_format'] ?? 'F j, Y') === 'F j, Y')>October 13, 2026 (Month D, YYYY)</option>
+                        <option value="m/d/Y" @selected(($preferences['date_format'] ?? 'F j, Y') === 'm/d/Y')>10/13/2026 (MM/DD/YYYY)</option>
+                        <option value="d/m/Y" @selected(($preferences['date_format'] ?? 'F j, Y') === 'd/m/Y')>13/10/2026 (DD/MM/YYYY)</option>
                     </select>
                 </div>
 
@@ -814,11 +818,11 @@
                     <label class="f-label">Display Time Format</label>
                     <div class="d-flex gap-3 mt-2">
                         <div class="form-check">
-                            <input class="form-check-input" type="radio" name="time_format" id="t12" value="12" checked>
+                            <input class="form-check-input" type="radio" name="time_format" id="t12" value="12" @checked((string)($preferences['time_format'] ?? '12') === '12')>
                             <label class="form-check-label" for="t12">12-Hour (e.g. 02:30 PM)</label>
                         </div>
                         <div class="form-check">
-                            <input class="form-check-input" type="radio" name="time_format" id="t24" value="24">
+                            <input class="form-check-input" type="radio" name="time_format" id="t24" value="24" @checked((string)($preferences['time_format'] ?? '12') === '24')>
                             <label class="form-check-label" for="t24">24-Hour (e.g. 14:30)</label>
                         </div>
                     </div>
@@ -827,10 +831,10 @@
                 <div class="col-md-6">
                     <label class="f-label">Session Inactivity Timeout</label>
                     <select name="session_timeout" class="f-select">
-                        <option value="30">30 minutes</option>
-                        <option value="60" selected>1 hour</option>
-                        <option value="240">4 hours</option>
-                        <option value="1440">24 hours</option>
+                        <option value="30" @selected((string)($preferences['session_timeout'] ?? '60') === '30')>30 minutes</option>
+                        <option value="60" @selected((string)($preferences['session_timeout'] ?? '60') === '60')>1 hour</option>
+                        <option value="240" @selected((string)($preferences['session_timeout'] ?? '60') === '240')>4 hours</option>
+                        <option value="1440" @selected((string)($preferences['session_timeout'] ?? '60') === '1440')>24 hours</option>
                     </select>
                 </div>
             </div>
@@ -881,26 +885,15 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3">
-                    <label class="f-label">Branch Name</label>
-                    <input type="text" class="f-input" placeholder="e.g. Lipa City Branch">
-                </div>
-                <div class="mb-3">
-                    <label class="f-label">Complete Street Address</label>
-                    <input type="text" class="f-input" placeholder="Building, Street, Barangay">
-                </div>
-                <div class="mb-3">
-                    <label class="f-label">Contact Number</label>
-                    <input type="text" class="f-input" placeholder="+63 9...">
-                </div>
-                <div class="mb-3">
-                    <label class="f-label">Operating Hours</label>
-                    <input type="text" class="f-input" placeholder="Mon-Sat: 9AM-6PM">
+                <div class="p-3 rounded-4" style="background: #FAF6F0; border: 1px solid rgba(196,200,188,0.4); color: #4A4E4A;">
+                    <div class="fw-bold mb-1"><i class="fas fa-circle-info text-success me-1"></i> Branch Provisioning</div>
+                    <div class="small mb-0">
+                        Multi-branch self-service provisioning is managed via clinic onboarding. Existing branch hotlines and operating schedules can be updated directly in Settings.
+                    </div>
                 </div>
             </div>
             <div class="modal-footer border-0 pt-0">
-                <button type="button" class="btn-soft" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn-green-save" data-bs-dismiss="modal" onclick="alert('Branch registered in pilot registry!')">Create Branch</button>
+                <button type="button" class="btn-green-save" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -915,30 +908,15 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3">
-                    <label class="f-label">Full Name</label>
-                    <input type="text" class="f-input" placeholder="e.g. Dr. Juan Dela Cruz">
-                </div>
-                <div class="mb-3">
-                    <label class="f-label">Email Address</label>
-                    <input type="email" class="f-input" placeholder="user@vetbook.com">
-                </div>
-                <div class="mb-3">
-                    <label class="f-label">Branch Assignment</label>
-                    <select class="f-select">
-                        <option value="Mabini Branch">Mabini Branch</option>
-                        <option value="Batangas City Branch">Batangas City Branch</option>
-                        <option value="">All Branches (Super Admin)</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="f-label">Temporary Password</label>
-                    <input type="password" class="f-input" placeholder="••••••••">
+                <div class="p-3 rounded-4" style="background: #FAF6F0; border: 1px solid rgba(196,200,188,0.4); color: #4A4E4A;">
+                    <div class="fw-bold mb-1"><i class="fas fa-user-shield text-success me-1"></i> Staff Account Provisioning</div>
+                    <div class="small mb-0">
+                        Multi-branch self-service provisioning is managed via clinic onboarding. Super Admins can edit existing administrator details, station assignments, and passwords from the staff list.
+                    </div>
                 </div>
             </div>
             <div class="modal-footer border-0 pt-0">
-                <button type="button" class="btn-soft" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn-green-save" data-bs-dismiss="modal" onclick="alert('Admin invitation link ready.')">Create Account</button>
+                <button type="button" class="btn-green-save" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>

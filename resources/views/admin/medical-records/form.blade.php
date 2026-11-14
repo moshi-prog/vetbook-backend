@@ -92,6 +92,14 @@
                 <div class="f-help">Optional. Used for follow-ups and vaccine reminders.</div>
                 @if($fieldError('next_visit_date')) <div class="f-error">{{ $fieldError('next_visit_date') }}</div> @endif
             </div>
+            <div class="col-md-6">
+                <label class="f-label" for="veterinarian">Attending Veterinarian</label>
+                <input type="text" id="veterinarian" name="veterinarian"
+                       class="f-input {{ $fieldError('veterinarian') ? 'is-invalid' : '' }}"
+                       value="{{ old('veterinarian', $record->veterinarian ?? '') }}"
+                       placeholder="e.g. Dr. Maria Santos, DVM">
+                @if($fieldError('veterinarian')) <div class="f-error">{{ $fieldError('veterinarian') }}</div> @endif
+            </div>
         </div>
 
         {{-- Diagnosis & treatment --}}

@@ -41,8 +41,10 @@ class PetController extends Controller
             'breed'              => 'nullable|string|max:100',
             'age'                => 'nullable|integer|min:0|max:100',
             'gender'             => 'nullable|string|in:male,female,Male,Female',
+            'spayed_neutered'    => 'nullable|boolean',
             'weight'             => 'nullable|numeric|min:0',
             'medical_conditions' => 'nullable|string',
+            'microchip_id'       => 'nullable|string|max:100',
             'avatar_url'         => 'nullable|string',
             'avatar'             => 'nullable',
         ]);
@@ -64,6 +66,8 @@ class PetController extends Controller
             }
         }
 
+        $microchipId = $request->filled('microchip_id') ? trim((string) $request->microchip_id) : null;
+
         $pet = Pet::create([
             'user_id'            => $user->id,
             'name'               => $request->name,
@@ -71,8 +75,10 @@ class PetController extends Controller
             'breed'              => $request->breed,
             'age'                => $request->age,
             'gender'             => $request->gender,
+            'spayed_neutered'    => $request->has('spayed_neutered') ? $request->boolean('spayed_neutered') : false,
             'weight'             => $request->weight,
             'medical_conditions' => $request->medical_conditions,
+            'microchip_id'       => $microchipId !== '' ? $microchipId : null,
             // Health status is controlled strictly by clinic administrators.
             'health_status'      => 'healthy',
             'avatar_url'         => $avatarUrl,
@@ -131,8 +137,10 @@ class PetController extends Controller
             'breed'              => 'nullable|string|max:100',
             'age'                => 'nullable|integer|min:0|max:100',
             'gender'             => 'nullable|string|in:male,female,Male,Female',
+            'spayed_neutered'    => 'nullable|boolean',
             'weight'             => 'nullable|numeric|min:0',
             'medical_conditions' => 'nullable|string',
+            'microchip_id'       => 'nullable|string|max:100',
             'avatar_url'         => 'nullable|string',
             'avatar'             => 'nullable',
         ]);
@@ -162,6 +170,17 @@ class PetController extends Controller
             'weight',
             'medical_conditions',
         ]));
+
+        if ($request->exists('spayed_neutered')) {
+            $pet->spayed_neutered = $request->input('spayed_neutered') !== null
+                ? $request->boolean('spayed_neutered')
+                : false;
+        }
+
+        if ($request->exists('microchip_id')) {
+            $trimmedMicrochip = trim((string) ($request->input('microchip_id') ?? ''));
+            $pet->microchip_id = $trimmedMicrochip !== '' ? $trimmedMicrochip : null;
+        }
 
         $pet->save();
 

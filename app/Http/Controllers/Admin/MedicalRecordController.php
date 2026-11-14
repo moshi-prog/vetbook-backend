@@ -145,9 +145,8 @@ class MedicalRecordController extends Controller
     {
         $data = $this->validated($request);
 
-        if (empty($data['veterinarian'])) {
-            $data['veterinarian'] = null;
-        }
+        $vet = trim((string) ($data['veterinarian'] ?? ''));
+        $data['veterinarian'] = $vet !== '' ? $vet : null;
 
         $record = MedicalRecord::create($data);
 
@@ -208,8 +207,9 @@ class MedicalRecordController extends Controller
 
         if (!$request->has('veterinarian') && $record->veterinarian) {
             $data['veterinarian'] = $record->veterinarian;
-        } elseif (empty($data['veterinarian'])) {
-            $data['veterinarian'] = null;
+        } else {
+            $vet = trim((string) ($data['veterinarian'] ?? ''));
+            $data['veterinarian'] = $vet !== '' ? $vet : null;
         }
 
         $record->update($data);

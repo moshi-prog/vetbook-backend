@@ -43,6 +43,22 @@ class Appointment extends Model
     }
 
     /**
+     * Format a stored time string into 12-hour AM/PM format (e.g. '2:30 PM').
+     */
+    public static function format12Hour(?string $time): string
+    {
+        if (empty($time)) {
+            return '';
+        }
+
+        try {
+            return Carbon::parse($time)->format('g:i A');
+        } catch (\Throwable $e) {
+            return (string) $time;
+        }
+    }
+
+    /**
      * Format appointment time based on the clinic's preferred display time format ('12' vs '24').
      */
     public function getFormattedTimeAttribute(): string

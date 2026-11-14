@@ -1,7 +1,7 @@
 {{-- Timeline of records. Params: $records (collection or paginator), $showPet (bool), $branch --}}
 @php
     $items = $records instanceof \Illuminate\Pagination\AbstractPaginator ? $records->getCollection() : collect($records);
-    $grouped = $items->groupBy(fn ($r) => $r->consultation_date->format('F Y'));
+    $grouped = $items->groupBy(fn ($r) => $r->consultation_date?->format('F Y') ?? '—');
     $today = \Carbon\Carbon::today();
 @endphp
 
@@ -18,8 +18,8 @@
             @endphp
             <div class="tl-item">
                 <div class="tl-date">
-                    <div class="d">{{ $r->consultation_date->format('d') }}</div>
-                    <div class="m">{{ $r->consultation_date->format('M') }}</div>
+                    <div class="d">{{ $r->consultation_date?->format('d') ?? '—' }}</div>
+                    <div class="m">{{ $r->consultation_date?->format('M') ?? '—' }}</div>
                 </div>
                 <div class="tl-card" onclick="window.location='{{ route('admin.medical-records.show', $r->id) }}'">
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -39,7 +39,7 @@
                                 </div>
                             @else
                                 <div class="tl-sub" style="font-size: 13px; color: #2E3230; font-weight: 600;">
-                                    {{ $r->consultation_date->format('l, F j, Y') }}
+                                    {{ $r->consultation_date?->format('l, F j, Y') ?? '—' }}
                                 </div>
                             @endif
                         </div>
@@ -111,7 +111,7 @@
                                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                     </div>
                                     <div class="modal-body" style="font-family: 'Nunito Sans', sans-serif; font-size: 14px; color: #4A4E4A;">
-                                        <p class="mb-2">Are you sure you want to delete this medical record from <strong>{{ $r->consultation_date->format('M d, Y') }}</strong>?</p>
+                                        <p class="mb-2">Are you sure you want to delete this medical record from <strong>{{ $r->consultation_date?->format('M d, Y') ?? '—' }}</strong>?</p>
                                         <div class="p-2 rounded mt-2" style="background: #E8F5E9; border: 1px solid rgba(46,125,50,0.25); color: #1B5E20; font-size: 12px;">
                                             <i class="fas fa-shield-alt me-1"></i> <strong>Safe Deletion:</strong> The pet profile and appointments will remain completely untouched.
                                         </div>

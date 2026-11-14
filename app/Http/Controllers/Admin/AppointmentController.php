@@ -201,10 +201,11 @@ class AppointmentController extends Controller
             $appointment->load(['user', 'pet']);
             $petName = $appointment->pet?->name ?? 'your pet';
             $formattedDate = \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y');
+            $formattedTime = Appointment::format12Hour($appointment->appointment_time);
             AppNotification::create([
                 'user_id' => $appointment->user_id,
                 'title'   => 'Appointment Confirmed',
-                'message' => "Great news! Your appointment for {$petName} on {$formattedDate} at {$appointment->appointment_time} at {$appointment->branch} has been confirmed by the clinic.",
+                'message' => "Great news! Your appointment for {$petName} on {$formattedDate} at {$formattedTime} at {$appointment->branch} has been confirmed by the clinic.",
                 'type'    => 'appointment_approved',
                 'data'    => [
                     'appointment_id' => $appointment->id,
@@ -217,7 +218,7 @@ class AppointmentController extends Controller
                 \App\Services\PushNotificationService::send(
                     $appointment->user->push_token,
                     'Appointment Approved! 🐾',
-                    "Great news! Your appointment for {$petName} on {$formattedDate} at {$appointment->appointment_time} has been confirmed.",
+                    "Great news! Your appointment for {$petName} on {$formattedDate} at {$formattedTime} has been confirmed.",
                     ['appointment_id' => $appointment->id, 'type' => 'appointment_approved']
                 );
             }
@@ -378,15 +379,24 @@ class AppointmentController extends Controller
             abort(403);
         }
 
+        if (in_array($appointment->status, ['completed', 'cancelled'], true)) {
+            return back()->with('error', 'Completed or cancelled appointments cannot be rescheduled.');
+        }
+
         $validated = $request->validate([
             'appointment_date' => 'required|date|after_or_equal:today',
-            'appointment_time' => 'required|string',
+            'appointment_time' => 'required|date_format:H:i',
         ]);
+
+        // Block lunch break hour (12:00 PM - 12:59 PM)
+        if ((int) explode(':', $validated['appointment_time'])[0] === 12) {
+            return back()->withInput()->with('error', 'The clinic is closed for lunch break between 12:00 PM and 1:00 PM. Please choose another time slot.');
+        }
 
         // Conflict check
         $conflict = Appointment::where('id', '!=', $appointment->id)
             ->where('branch', $appointment->branch)
-            ->where('appointment_date', $validated['appointment_date'])
+            ->whereDate('appointment_date', $validated['appointment_date'])
             ->where('appointment_time', $validated['appointment_time'])
             ->whereIn('status', ['pending', 'approved'])
             ->exists();
@@ -395,23 +405,37 @@ class AppointmentController extends Controller
             return back()->with('error', 'That time slot is already booked for this branch.');
         }
 
+        $oldDate = !empty($appointment->appointment_date)
+            ? \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y')
+            : 'N/A';
+        $oldTime = Appointment::format12Hour($appointment->appointment_time);
+
         $appointment->appointment_date = $validated['appointment_date'];
         $appointment->appointment_time = $validated['appointment_time'];
+
+        $newDate = \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y');
+        $newTime = Appointment::format12Hour($appointment->appointment_time);
+
+        $rescheduleTag = "[Rescheduled by Clinic] Previous: {$oldDate} at {$oldTime} -> New: {$newDate} at {$newTime}";
+        $appointment->notes = $appointment->notes ? ($appointment->notes . "\n\n" . $rescheduleTag) : $rescheduleTag;
         $appointment->save();
 
         // Create In-App Notification
         try {
             $appointment->load(['user', 'pet']);
             $petName = $appointment->pet?->name ?? 'your pet';
-            $formattedDate = \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y');
             AppNotification::create([
                 'user_id' => $appointment->user_id,
                 'title'   => 'Appointment Rescheduled by Clinic',
-                'message' => "BK Petaholic Clinic has updated {$petName}'s appointment to {$formattedDate} at {$appointment->appointment_time}.",
+                'message' => "BK Petaholic Clinic has updated {$petName}'s appointment to {$newDate} at {$newTime} (previously {$oldDate} at {$oldTime}).",
                 'type'    => 'appointment_rescheduled',
                 'data'    => [
                     'appointment_id' => $appointment->id,
                     'pet_id'         => $appointment->pet_id,
+                    'old_date'       => $oldDate,
+                    'old_time'       => $oldTime,
+                    'new_date'       => $newDate,
+                    'new_time'       => $newTime,
                 ],
             ]);
 
@@ -420,7 +444,7 @@ class AppointmentController extends Controller
                 \App\Services\PushNotificationService::send(
                     $appointment->user->push_token,
                     'Appointment Rescheduled by Clinic',
-                    "BK Petaholic Clinic has updated {$petName}'s appointment to {$formattedDate} at {$appointment->appointment_time}.",
+                    "BK Petaholic Clinic has updated {$petName}'s appointment to {$newDate} at {$newTime} (previously {$oldDate} at {$oldTime}).",
                     ['appointment_id' => $appointment->id, 'type' => 'appointment_rescheduled']
                 );
             }
@@ -444,7 +468,13 @@ class AppointmentController extends Controller
      */
     public function destroy($id)
     {
+        $user = auth()->user();
         $appointment = Appointment::findOrFail($id);
+
+        if ($user->branch && $appointment->branch !== $user->branch) {
+            abort(403, 'Unauthorized branch access.');
+        }
+
         $appointment->delete();
 
         return redirect()->route('admin.appointments.index')
@@ -491,14 +521,17 @@ class AppointmentController extends Controller
             ->orderBy('appointment_date', 'desc')
             ->orderBy('appointment_time', 'desc');
 
+        // Always enforce branch scoping for branch admins, even when specific IDs are supplied
+        if ($branch) {
+            $query->where('branch', $branch);
+        }
+
         if ($request->filled('ids')) {
             $ids = is_array($request->ids) ? $request->ids : explode(',', (string) $request->ids);
             $query->whereIn('id', array_filter($ids));
         } else {
             // Apply branch filter
-            if ($branch) {
-                $query->where('branch', $branch);
-            } elseif ($request->filled('branch') && $request->branch !== 'all') {
+            if (!$branch && $request->filled('branch') && $request->branch !== 'all') {
                 $query->where('branch', $request->branch);
             }
 

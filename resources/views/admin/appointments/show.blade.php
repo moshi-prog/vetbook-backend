@@ -378,7 +378,7 @@
                 </div>
                 <div class="modal-body">
                     <p style="font-family: 'Nunito Sans', sans-serif; font-size: 14px; color: #4A4E4A;">
-                        Are you sure you want to cancel this appointment? The pet owner will not be notified automatically.
+                        Are you sure you want to cancel this appointment? The pet owner will automatically receive an in-app alert, push notification, and SMS with your reason.
                     </p>
                     <label style="font-family: 'Nunito Sans', sans-serif; font-size: 12px; font-weight: 600; color: #6B6358;">
                         CANCEL REASON (OPTIONAL)

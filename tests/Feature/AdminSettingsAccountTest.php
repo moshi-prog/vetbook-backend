@@ -285,4 +285,82 @@ class AdminSettingsAccountTest extends TestCase
         $reloadResponse->assertSee('name="templates[completed]"', false);
         $reloadResponse->assertSee('name="templates[cancellation]"', false);
     }
+
+    public function test_admin_preferences_persist_and_render_selected_values_on_reload(): void
+    {
+        $superAdmin = $this->createSuperAdmin();
+
+        $response = $this->actingAs($superAdmin)->post('/admin/settings/preferences', [
+            'timezone' => 'UTC',
+            'date_format' => 'd/m/Y',
+            'time_format' => '24',
+            'session_timeout' => 240,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+        $response->assertSessionHas('success', 'System preferences updated successfully.');
+
+        $this->assertSame('UTC', ClinicSetting::get('pref_timezone'));
+        $this->assertSame('d/m/Y', ClinicSetting::get('pref_date_format'));
+        $this->assertSame('24', ClinicSetting::get('pref_time_format'));
+        $this->assertSame('240', ClinicSetting::get('pref_session_timeout'));
+
+        $reload = $this->actingAs($superAdmin)->get('/admin/settings');
+        $reload->assertStatus(200);
+        $html = $reload->getContent();
+
+        $this->assertSame(1, preg_match('/<option\s+value="UTC"[^>]*\bselected\b/', $html));
+        $this->assertSame(0, preg_match('/<option\s+value="Asia\/Manila"[^>]*\bselected\b/', $html));
+
+        $this->assertSame(1, preg_match('/<option\s+value="d\/m\/Y"[^>]*\bselected\b/', $html));
+        $this->assertSame(0, preg_match('/<option\s+value="F j, Y"[^>]*\bselected\b/', $html));
+
+        $this->assertSame(1, preg_match('/<input[^>]*id="t24"[^>]*\bchecked\b/', $html));
+        $this->assertSame(0, preg_match('/<input[^>]*id="t12"[^>]*\bchecked\b/', $html));
+
+        $this->assertSame(1, preg_match('/<option\s+value="240"[^>]*\bselected\b/', $html));
+        $this->assertSame(0, preg_match('/<option\s+value="60"[^>]*\bselected\b/', $html));
+    }
+
+    public function test_admin_preferences_validation_rejects_invalid_values(): void
+    {
+        $superAdmin = $this->createSuperAdmin();
+
+        $response = $this->actingAs($superAdmin)->post('/admin/settings/preferences', [
+            'time_format' => '99',
+            'session_timeout' => 2,
+        ]);
+
+        $response->assertSessionHasErrors(['time_format', 'session_timeout']);
+    }
+
+    public function test_super_admin_sees_operating_hours_inputs_and_non_deceptive_provisioning_notices(): void
+    {
+        $superAdmin = $this->createSuperAdmin();
+
+        $response = $this->actingAs($superAdmin)->get('/admin/settings');
+        $response->assertStatus(200);
+
+        $response->assertSee('name="hours_weekday"', false);
+        $response->assertSee('name="hours_saturday"', false);
+        $response->assertSee('name="hours_sunday"', false);
+
+        $response->assertSee('Multi-branch self-service provisioning is managed via clinic onboarding.');
+        $response->assertDontSee('Branch registered in pilot registry');
+        $response->assertDontSee('Admin invitation link ready');
+    }
+
+    public function test_chatbot_system_prompt_incorporates_saved_persona_and_live_clinic_hours(): void
+    {
+        ClinicSetting::set('chatbot_system_prompt', 'Always greet pet parents with Warm Batangas Hospitality.');
+        ClinicSetting::set('clinic_hours_weekday', '07:30 AM - 08:00 PM');
+        ClinicSetting::set('branch_mabini_hours_weekday', '08:00 AM - 05:30 PM');
+
+        $prompt = \App\Services\ChatbotService::buildSystemPrompt();
+
+        $this->assertStringContainsString('Always greet pet parents with Warm Batangas Hospitality.', $prompt);
+        $this->assertStringContainsString('08:00 AM - 05:30 PM', $prompt);
+        $this->assertStringContainsString('07:30 AM - 08:00 PM', $prompt);
+    }
 }

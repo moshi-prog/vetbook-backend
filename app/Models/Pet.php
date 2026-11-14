@@ -13,8 +13,10 @@ class Pet extends Model
         'breed',
         'age',
         'gender',
+        'spayed_neutered',
         'weight',
         'medical_conditions',
+        'microchip_id',
         'health_status',
         'avatar_url',
     ];
@@ -24,6 +26,7 @@ class Pet extends Model
         return [
             'age' => 'integer',
             'weight' => 'decimal:2',
+            'spayed_neutered' => 'boolean',
         ];
     }
 

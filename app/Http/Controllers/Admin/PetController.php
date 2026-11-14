@@ -218,7 +218,7 @@ class PetController extends Controller
 
         if ($request->input('format') === 'csv') {
             $filename = 'pet-registry-report-' . now()->format('Y-m-d-His') . '.csv';
-            $headers = ['ID', 'Pet Name', 'Species', 'Breed', 'Age', 'Weight (kg)', 'Gender', 'Owner Name', 'Owner Phone', 'Owner Email', 'Medical Conditions'];
+            $headers = ['ID', 'Pet Name', 'Species', 'Breed', 'Age', 'Weight (kg)', 'Gender', 'Health Status', 'Owner Name', 'Owner Phone', 'Owner Email', 'Medical Conditions'];
             $rows = $records->map(function ($pet) {
                 return [
                     $pet->id,
@@ -228,6 +228,7 @@ class PetController extends Controller
                     $pet->age !== null ? $pet->age : '',
                     $pet->weight !== null ? number_format($pet->weight, 1) : '',
                     ucfirst($pet->gender ?: ''),
+                    $pet->health_status ?? 'healthy',
                     $pet->owner->name ?? 'Unknown',
                     $pet->owner->phone_number ?? '',
                     $pet->owner->email ?? '',

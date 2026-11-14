@@ -439,17 +439,24 @@ class SettingsController extends Controller
 
     public function updatePreferences(Request $request)
     {
-        if ($request->has('timezone')) {
-            ClinicSetting::set('pref_timezone', $request->timezone);
+        $validated = $request->validate([
+            'timezone'        => 'nullable|string|max:100',
+            'date_format'     => 'nullable|string|max:50',
+            'time_format'     => 'nullable|in:12,24',
+            'session_timeout' => 'nullable|integer|min:5|max:1440',
+        ]);
+
+        if (!empty($validated['timezone'])) {
+            ClinicSetting::set('pref_timezone', $validated['timezone']);
         }
-        if ($request->has('date_format')) {
-            ClinicSetting::set('pref_date_format', $request->date_format);
+        if (!empty($validated['date_format'])) {
+            ClinicSetting::set('pref_date_format', $validated['date_format']);
         }
-        if ($request->has('time_format')) {
-            ClinicSetting::set('pref_time_format', $request->time_format);
+        if (!empty($validated['time_format'])) {
+            ClinicSetting::set('pref_time_format', $validated['time_format']);
         }
-        if ($request->has('session_timeout')) {
-            ClinicSetting::set('pref_session_timeout', $request->session_timeout);
+        if (!empty($validated['session_timeout'])) {
+            ClinicSetting::set('pref_session_timeout', (string) $validated['session_timeout']);
         }
 
         return back()->with('success', 'System preferences updated successfully.');

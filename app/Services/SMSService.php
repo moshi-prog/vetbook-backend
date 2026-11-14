@@ -117,6 +117,10 @@ class SMSService
             return '63' . $m[1];
         }
 
+        if (preg_match('/^(9\d{9})$/', $phone, $m)) {
+            return '63' . $m[1];
+        }
+
         return null;
     }
 
@@ -127,10 +131,17 @@ class SMSService
         $date = !empty($appointment->appointment_date)
             ? \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y')
             : '';
-        $time = (string) ($appointment->appointment_time ?? '');
+        $time = !empty($appointment->appointment_time)
+            ? ($appointment->formatted_time ?? \App\Models\Appointment::format12Hour($appointment->appointment_time))
+            : '';
         $ownerName = $appointment->user?->name ?? 'Client';
         $petName = $appointment->pet?->name ?? 'your pet';
         $branch = (string) ($appointment->branch ?? 'BK Petaholic');
+
+        $cancelReason = '';
+        if (!empty($appointment->notes) && preg_match('/\[Cancelled(?: by [^\]]+)?\][ \t]*(?:Reason:[ \t]*)?(.+)$/m', $appointment->notes, $matches)) {
+            $cancelReason = trim($matches[1]);
+        }
 
         $replacements = [
             '{owner_name}' => $ownerName,
@@ -138,6 +149,7 @@ class SMSService
             '{date}'       => $date,
             '{time}'       => $time,
             '{branch}'     => $branch,
+            '{reason}'     => $cancelReason ?: 'Schedule adjustment',
         ];
 
         return strtr($template, $replacements);
@@ -207,8 +219,13 @@ class SMSService
             return ['success' => false, 'message_id' => null, 'error' => 'Missing user or pet'];
         }
 
-        $message = "BK Petaholic: Reminder - {$pet->name} has an appointment tomorrow at "
-            . "{$appointment->appointment_time}, {$appointment->branch}. See you!";
+        $datePhrase = !empty($appointment->appointment_date)
+            ? 'on ' . \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y')
+            : 'tomorrow';
+        $formattedTime = \App\Models\Appointment::format12Hour($appointment->appointment_time);
+
+        $message = "BK Petaholic: Reminder - {$pet->name} has an appointment {$datePhrase} at "
+            . "{$formattedTime}, {$appointment->branch}. See you!";
 
         return self::send($user->phone_number, $message, [
             'user_id' => $user->id,
@@ -238,7 +255,7 @@ class SMSService
             return ['success' => false, 'message_id' => null, 'error' => 'No phone number provided'];
         }
 
-        $defaultTemplate = 'Hi {owner_name}, your appointment on {date} has been cancelled. Please rebook if needed.';
+        $defaultTemplate = 'Hi {owner_name}, your appointment for {pet_name} on {date} has been cancelled by the clinic. Reason: {reason}. — BK Petaholic';
         $message = self::formatTemplate('sms_template_cancellation', $defaultTemplate, $appointment);
 
         return self::send($phone, $message, [
