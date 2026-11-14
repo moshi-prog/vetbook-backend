@@ -277,4 +277,21 @@ class BranchApiTest extends TestCase
         $r2->assertStatus(200);
         $this->assertSame('https://vetbook-test.ngrok-free.app/storage/clinic/sample.png', $r2->json('clinic.logo_url'));
     }
+
+    public function test_branches_endpoint_parses_leading_zero_and_saturday_schedule_correctly(): void
+    {
+        ClinicSetting::set('clinic_hours_weekday', '09:00 AM - 012:00 PM');
+        ClinicSetting::set('clinic_hours_saturday', 'Sat: 09:00 AM - 03:00 PM');
+
+        $response = $this->getJson('/api/branches');
+        $response->assertStatus(200);
+
+        $mabini = collect($response->json('data'))->firstWhere('id', 'mabini');
+        $this->assertNotNull($mabini);
+        $this->assertSame('09:00', $mabini['weekday_open']);
+        $this->assertSame('12:00', $mabini['weekday_close']);
+        $this->assertSame('09:00', $mabini['saturday_open']);
+        $this->assertSame('15:00', $mabini['saturday_close']);
+        $this->assertFalse($mabini['saturday_closed']);
+    }
 }

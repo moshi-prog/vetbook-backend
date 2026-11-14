@@ -28,6 +28,12 @@ class PushNotificationService
 
         $trimmed = trim($pushToken);
 
+        // 0. Native standalone device fallback (notifications handled locally via client polling)
+        if (str_starts_with($trimmed, 'LocalDeviceToken[')) {
+            Log::info("PushNotificationService: Local device fallback active ({$trimmed}); notifications handled on device.");
+            return ['success' => true, 'response' => 'Local device notification fallback is active.'];
+        }
+
         // 1. Detect Web Push subscription (JSON object containing 'endpoint')
         if (str_starts_with($trimmed, '{') && str_contains($trimmed, 'endpoint')) {
             return static::sendWebPush($pushToken, $title, $body, $data);

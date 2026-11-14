@@ -226,5 +226,29 @@ class AdminAlertsDeletesPushAndDynamicHoursTest extends TestCase
         $this->assertNull($mabini['sunday_open']);
         $this->assertNull($mabini['sunday_close']);
     }
+
+    public function test_local_device_token_fallback_succeeds_without_calling_expo_api(): void
+    {
+        Http::fake();
+
+        [$owner] = $this->createPetOwnerWithPet();
+        $token = JWTAuth::fromUser($owner);
+        $fallbackToken = 'LocalDeviceToken[android-standalone-apk-test]';
+
+        $saveResponse = $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson('/api/user/push-token', [
+                'push_token' => $fallbackToken,
+            ]);
+        $saveResponse->assertStatus(200);
+        $this->assertSame($fallbackToken, $owner->fresh()->push_token);
+
+        $testPushResponse = $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson('/api/user/test-push');
+
+        $testPushResponse->assertStatus(200);
+        $testPushResponse->assertJsonPath('status', 'success');
+        Http::assertNothingSent();
+        $this->assertSame($fallbackToken, $owner->fresh()->push_token);
+    }
 }
 

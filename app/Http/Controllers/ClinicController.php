@@ -67,14 +67,19 @@ class ClinicController extends Controller
                 return ['open' => null, 'close' => null, 'is_closed' => true];
             }
 
-            // Strip prefix labels like "Mon–Sat:", "Sun:", etc.
-            $cleaned = preg_replace('/^(mon(day)?\s*[\-–]\s*(fri(day)?|sat(urday)?)|sat(urday)?|sun(day)?)\s*:\s*/i', '', trim($hourString));
+            // Strip prefix labels like "Mon–Sat:", "Sun:", "Sat:", etc.
+            $cleaned = preg_replace('/^(?:mon(?:day)?\s*[\-–]\s*(?:fri(?:day)?|sat(?:urday)?)|sat(?:urday)?s?|sun(?:day)?s?)\s*:?\s*/iu', '', trim($hourString));
 
-            // Match "9:00 AM – 6:00 PM", "09:00 - 15:00", "9:00AM-3:00PM", etc.
-            if (preg_match('/(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)\s*[\-–—to]+\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)/i', $cleaned, $matches)) {
+            // Normalize extraneous leading zeros on hours (e.g. "012:00 PM" -> "12:00 PM", "009:00" -> "9:00")
+            $sanitizeToken = static fn (string $token): string =>
+                preg_replace('/(?<!:)\b0+(?=[1-9]|\d{2})/', '', trim($token));
+            $cleaned = $sanitizeToken($cleaned);
+
+            // Match "9:00 AM – 6:00 PM", "09:00 - 15:00", "9:00AM-3:00PM", "9 AM to 3 PM", etc.
+            if (preg_match('/(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)\s*(?:[\-–—]+|\bto\b)\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)/iu', $cleaned, $matches)) {
                 try {
-                    $open = \Carbon\Carbon::parse(trim($matches[1]))->format('H:i');
-                    $close = \Carbon\Carbon::parse(trim($matches[2]))->format('H:i');
+                    $open = \Carbon\Carbon::parse($sanitizeToken($matches[1]))->format('H:i');
+                    $close = \Carbon\Carbon::parse($sanitizeToken($matches[2]))->format('H:i');
                     return ['open' => $open, 'close' => $close, 'is_closed' => false];
                 } catch (\Throwable $e) {}
             }
