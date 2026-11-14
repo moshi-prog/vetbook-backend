@@ -7,6 +7,7 @@ use App\Models\Pet;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class BookedSlotsApiTest extends TestCase
 {
@@ -123,6 +124,46 @@ class BookedSlotsApiTest extends TestCase
         $this->getJson('/api/appointments/booked-slots?branch=Mabini+Branch&date=not-a-date')
             ->assertStatus(422)
             ->assertJsonValidationErrors(['date']);
+    }
+
+    public function test_appointments_reject_lunch_break_slots_on_store_and_reschedule(): void
+    {
+        $pet = $this->createPetForOwner();
+        $owner = User::findOrFail($pet->user_id);
+        $token = JWTAuth::fromUser($owner);
+        $futureDate = now()->addDays(3)->toDateString();
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/appointments', [
+                'pet_id'           => $pet->id,
+                'branch'           => 'Mabini Branch',
+                'appointment_date' => $futureDate,
+                'appointment_time' => '12:00',
+                'reason'           => 'Checkup',
+            ])
+            ->assertStatus(422)
+            ->assertJson([
+                'message' => 'The clinic is closed for lunch break between 12:00 PM and 1:00 PM. Please select a morning or afternoon slot.',
+            ]);
+
+        $appointment = Appointment::create([
+            'user_id'          => $owner->id,
+            'pet_id'           => $pet->id,
+            'branch'           => 'Mabini Branch',
+            'appointment_date' => $futureDate,
+            'appointment_time' => '09:30',
+            'status'           => Appointment::STATUS_PENDING,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->putJson("/api/appointments/{$appointment->id}/reschedule", [
+                'appointment_date' => $futureDate,
+                'appointment_time' => '12:30',
+            ])
+            ->assertStatus(422)
+            ->assertJson([
+                'message' => 'The clinic is closed for lunch break between 12:00 PM and 1:00 PM. Please select a morning or afternoon slot.',
+            ]);
     }
 }
 

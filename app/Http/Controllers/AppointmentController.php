@@ -28,6 +28,22 @@ class AppointmentController extends Controller
     ];
 
     /**
+     * Reject appointments scheduled during the 12:00 PM - 1:00 PM clinic lunch break.
+     */
+    private function rejectIfLunchBreak(string $appointmentTime): ?JsonResponse
+    {
+        $timeParts = explode(':', $appointmentTime);
+        $hour = (int) ($timeParts[0] ?? -1);
+        if ($hour === 12) {
+            return response()->json([
+                'message' => 'The clinic is closed for lunch break between 12:00 PM and 1:00 PM. Please select a morning or afternoon slot.',
+            ], 422);
+        }
+
+        return null;
+    }
+
+    /**
      * Return all appointments belonging to the authenticated user.
      *
      * GET /api/user/appointments
@@ -106,6 +122,10 @@ class AppointmentController extends Controller
                 'message' => 'Validation failed',
                 'errors'  => $validator->errors(),
             ], 400);
+        }
+
+        if ($lunchError = $this->rejectIfLunchBreak($request->appointment_time)) {
+            return $lunchError;
         }
 
         $pet = Pet::find($request->pet_id);
@@ -272,6 +292,10 @@ class AppointmentController extends Controller
                 'message' => 'Validation failed',
                 'errors'  => $validator->errors(),
             ], 422);
+        }
+
+        if ($lunchError = $this->rejectIfLunchBreak($request->appointment_time)) {
+            return $lunchError;
         }
 
         // Optional conflict check for same branch, date, time
