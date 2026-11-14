@@ -253,7 +253,7 @@
                                 <td>
                                     {{ \Carbon\Carbon::parse($appt->appointment_date)->format('M d, Y') }}
                                     <div style="font-size: 11px; color: #6B6358;">
-                                        {{ $appt->appointment_time }}
+                                        {{ $appt->formatted_time }}
                                     </div>
                                 </td>
                                 <td>

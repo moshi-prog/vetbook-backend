@@ -392,7 +392,7 @@
                             <td>
                                 <strong>{{ $appt->appointment_date ? \Carbon\Carbon::parse($appt->appointment_date)->format('M d, Y') : '—' }}</strong>
                                 <br>
-                                <span style="color: #666; font-size: 10px;">{{ $appt->appointment_time ?? '—' }}</span>
+                                <span style="color: #666; font-size: 10px;">{{ $appt->formatted_time }}</span>
                             </td>
                             <td>
                                 <strong>{{ $appt->pet->name ?? 'Unknown Pet' }}</strong>

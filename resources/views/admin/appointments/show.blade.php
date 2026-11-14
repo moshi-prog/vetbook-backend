@@ -233,7 +233,7 @@
             </div>
             <div class="detail-row">
                 <div class="detail-label">Time</div>
-                <div class="detail-value">{{ $appointment->appointment_time }}</div>
+                <div class="detail-value">{{ $appointment->formatted_time }}</div>
             </div>
             <div class="detail-row">
                 <div class="detail-label">Reason</div>

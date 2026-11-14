@@ -229,7 +229,7 @@
                                     <td style="font-weight: 600;">{{ $a->pet->name ?? 'Unknown' }}</td>
                                     <td>{{ $a->branch }}</td>
                                     <td>{{ \Carbon\Carbon::parse($a->appointment_date)->format('M d, Y') }}</td>
-                                    <td>{{ $a->appointment_time }}</td>
+                                    <td>{{ $a->formatted_time }}</td>
                                     <td><span class="status-pill {{ $a->status }}">{{ ucfirst($a->status) }}</span></td>
                                 </tr>
                             @endforeach

@@ -600,7 +600,7 @@
                                     <td>
                                         <div class="fw-bold">{{ $appt->appointment_date ? $appt->appointment_date->format('M d, Y') : '—' }}</div>
                                         <div style="font-size: 11px; color: #6B6358;">
-                                            {{ $appt->appointment_time ? date('g:i A', strtotime($appt->appointment_time)) : '—' }}
+                                            {{ $appt->formatted_time }}
                                         </div>
                                     </td>
                                     <td>
