@@ -43,7 +43,7 @@ class DashboardController extends Controller
 
         // Recent appointments (with pet and owner)
         $recentAppointments = (clone $appointmentsQuery)
-            ->with(['pet', 'user'])
+            ->with(['pet:id,user_id,name,species,breed,age,age_months,gender,weight,health_status', 'user:id,name,email,phone_number,role'])
             ->orderBy('created_at', 'desc')
             ->limit(8)
             ->get();

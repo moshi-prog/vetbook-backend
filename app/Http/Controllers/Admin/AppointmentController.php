@@ -18,7 +18,7 @@ class AppointmentController extends Controller
 
         $sort = $request->input('sort', 'newest_booked');
 
-        $query = Appointment::with(['pet', 'user']);
+        $query = Appointment::with(['pet:id,user_id,name,species,breed,age,age_months,gender,weight,health_status', 'user:id,name,email,phone_number,role']);
 
         if ($sort === 'appointment_date') {
             $query->orderBy('appointment_date', 'desc')->orderBy('appointment_time', 'desc');

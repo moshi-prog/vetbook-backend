@@ -23,7 +23,8 @@ class MedicalRecordController extends Controller
         $period = $request->input('period', 'all');
 
         $query = MedicalRecord::with([
-            'pet.owner',
+            'pet:id,user_id,name,species,breed,age,age_months,gender,weight,health_status',
+            'pet.owner:id,name,email,phone_number',
             'pet.appointments' => function ($q) {
                 $q->select('id', 'pet_id', 'branch');
             },

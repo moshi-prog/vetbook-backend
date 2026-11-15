@@ -14,6 +14,35 @@ class ClinicSetting extends Model
     ];
 
     /**
+     * In-memory per-request cache of all settings (key => value).
+     */
+    protected static ?array $cache = null;
+
+    protected static function booted(): void
+    {
+        static::saved(function () {
+            static::$cache = null;
+        });
+        static::deleted(function () {
+            static::$cache = null;
+        });
+    }
+
+    protected static function loadCache(): array
+    {
+        if (static::$cache === null) {
+            static::$cache = static::pluck('value', 'key')->all();
+        }
+
+        return static::$cache;
+    }
+
+    public static function clearCache(): void
+    {
+        static::$cache = null;
+    }
+
+    /**
      * Get a setting value by key, with an optional fallback default.
      *
      * @param string $key
@@ -22,10 +51,10 @@ class ClinicSetting extends Model
      */
     public static function get(string $key, $default = null)
     {
-        $setting = static::where('key', $key)->first();
+        $all = static::loadCache();
 
-        if ($setting !== null && $setting->value !== null && $setting->value !== '') {
-            return $setting->value;
+        if (array_key_exists($key, $all) && $all[$key] !== null && $all[$key] !== '') {
+            return $all[$key];
         }
 
         return $default;
@@ -40,10 +69,20 @@ class ClinicSetting extends Model
      */
     public static function set(string $key, $value)
     {
-        return static::updateOrCreate(
+        $stored = $value !== null ? (string) $value : null;
+
+        $model = static::updateOrCreate(
             ['key' => $key],
-            ['value' => $value !== null ? (string)$value : null]
+            ['value' => $stored]
         );
+
+        // The saved hook resets the cache; reload lazily on next read, but
+        // seed it now if it was warm so same-request reads are fresh.
+        if (static::$cache !== null) {
+            static::$cache[$key] = $stored;
+        }
+
+        return $model;
     }
 
     /**

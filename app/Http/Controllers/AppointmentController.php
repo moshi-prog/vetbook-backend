@@ -87,6 +87,7 @@ class AppointmentController extends Controller
         $booked = Appointment::where('branch', $request->branch)
             ->whereDate('appointment_date', $date)
             ->whereIn('status', self::ACTIVE_STATUSES)
+            ->orderBy('appointment_time')
             ->pluck('appointment_time')
             ->map(fn ($time) => substr((string) $time, 0, 5))
             ->unique()
