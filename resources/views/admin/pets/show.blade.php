@@ -371,7 +371,7 @@
         </div>
         <div>
             <div class="stat-value">
-                {{ $pet->age !== null ? $pet->age . ' ' . \Illuminate\Support\Str::plural('yr', $pet->age) . ' old' : '—' }}
+                {{ $pet->formatted_age !== '—' ? $pet->formatted_age . ' old' : '—' }}
             </div>
             <div class="stat-label">Age</div>
         </div>

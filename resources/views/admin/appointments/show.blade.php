@@ -211,8 +211,7 @@
             <div class="detail-row">
                 <div class="detail-label">Age / Gender</div>
                 <div class="detail-value">
-                    {{ $appointment->pet->age ?? '—' }}
-                    @if($appointment->pet && $appointment->pet->age) yrs @endif
+                    {{ $appointment->pet?->formatted_age ?? '—' }}
                     • {{ $appointment->pet->gender ?? '—' }}
                 </div>
             </div>

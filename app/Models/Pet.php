@@ -12,6 +12,7 @@ class Pet extends Model
         'species',
         'breed',
         'age',
+        'age_months',
         'gender',
         'spayed_neutered',
         'weight',
@@ -25,9 +26,24 @@ class Pet extends Model
     {
         return [
             'age' => 'integer',
+            'age_months' => 'integer',
             'weight' => 'decimal:2',
             'spayed_neutered' => 'boolean',
         ];
+    }
+
+    /**
+     * Human-readable age: months for pets under 1 year, otherwise years.
+     */
+    public function getFormattedAgeAttribute(): string
+    {
+        if ($this->age_months !== null && $this->age_months > 0 && ($this->age === null || $this->age === 0)) {
+            return $this->age_months . ' mo' . ($this->age_months === 1 ? '' : 's');
+        }
+        if ($this->age !== null) {
+            return $this->age . ' yr' . ($this->age === 1 ? '' : 's');
+        }
+        return '—';
     }
 
     public function owner()

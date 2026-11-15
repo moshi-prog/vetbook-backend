@@ -443,7 +443,7 @@
                             </td>
                             <td>
                                 <div style="font-weight: 600;">
-                                    {{ $pet->age !== null ? $pet->age . ' ' . \Illuminate\Support\Str::plural('yr', $pet->age) : '—' }}
+                                    {{ $pet->formatted_age }}
                                 </div>
                                 <div class="pet-sub">
                                     @if($pet->gender)
