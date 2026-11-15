@@ -419,7 +419,9 @@
                                     <div>
                                         <a href="{{ route('admin.pets.show', $pet->id) }}" class="pet-name-link"
                                            onclick="event.stopPropagation()">{{ $pet->name }}</a>
-                                        <div class="pet-sub">#{{ $pet->id }}</div>
+                                        @if(!empty($pet->breed))
+                                            <div class="pet-sub">{{ $pet->breed }}</div>
+                                        @endif
                                     </div>
                                 </div>
                             </td>

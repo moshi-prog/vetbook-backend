@@ -112,4 +112,44 @@ class AdminPetShowTest extends TestCase
         $response->assertSee('Anonymous User');
         $response->assertSee('No pre-existing conditions or allergies recorded');
     }
+
+    public function test_admin_pets_index_hides_raw_id_and_shows_breed_when_available(): void
+    {
+        $admin = User::create([
+            'name' => 'Admin Index',
+            'email' => 'admin.index@example.com',
+            'password' => bcrypt('password123'),
+            'role' => 'admin',
+        ]);
+
+        $owner = User::create([
+            'name' => 'Owner Index',
+            'email' => 'owner.index@example.com',
+            'password' => bcrypt('password123'),
+            'role' => 'pet_owner',
+        ]);
+
+        $petWithBreed = Pet::create([
+            'user_id' => $owner->id,
+            'name' => 'Mocha',
+            'species' => 'Dog',
+            'breed' => 'Shih Tzu',
+        ]);
+
+        $petWithoutBreed = Pet::create([
+            'user_id' => $owner->id,
+            'name' => 'Nori',
+            'species' => 'Cat',
+            'breed' => null,
+        ]);
+
+        $response = $this->actingAs($admin)->get('/admin/pets');
+
+        $response->assertStatus(200);
+        $response->assertSee('Mocha');
+        $response->assertSee('Shih Tzu');
+        $response->assertSee('Nori');
+        $response->assertDontSee("<div class=\"pet-sub\">#{$petWithBreed->id}</div>", false);
+        $response->assertDontSee("<div class=\"pet-sub\">#{$petWithoutBreed->id}</div>", false);
+    }
 }
