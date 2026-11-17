@@ -98,16 +98,7 @@
                                        style="border-radius: 12px; padding: 8px 10px; border-color: #DCD6C8;">
                             </div>
 
-                            <div class="col-md-2 col-6">
-                                <label class="form-label mb-1" style="font-size: 11px; font-weight: 700; color: #6B6358; text-transform: uppercase;">
-                                    Low Alert &le;
-                                </label>
-                                <input type="number" name="low_stock_threshold" class="form-control form-control-sm"
-                                       min="0" max="10000" value="5"
-                                       style="border-radius: 12px; padding: 8px 10px; border-color: #DCD6C8;">
-                            </div>
-
-                            <div class="col-md-3 col-6">
+                            <div class="col-md-4 col-12">
                                 <label class="form-label mb-1" style="font-size: 11px; font-weight: 700; color: #6B6358; text-transform: uppercase;">
                                     Branch
                                 </label>
@@ -125,7 +116,7 @@
                                 @endif
                             </div>
 
-                            <div class="col-md-5">
+                            <div class="col-md-6">
                                 <label class="form-label mb-1" style="font-size: 11px; font-weight: 700; color: #6B6358; text-transform: uppercase;">
                                     Notes
                                 </label>
