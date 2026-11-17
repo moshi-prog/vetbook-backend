@@ -83,7 +83,7 @@ class AdminSettingsAccountTest extends TestCase
 
     public function test_admin_can_change_password_with_valid_current_password(): void
     {
-        $admin = $this->createAdmin(['password' => 'oldpassword123']);
+        $admin = $this->createSuperAdmin(['password' => 'oldpassword123']);
 
         $response = $this->actingAs($admin)->post('/admin/profile/password', [
             'current_password' => 'oldpassword123',
@@ -100,7 +100,7 @@ class AdminSettingsAccountTest extends TestCase
 
     public function test_admin_change_password_fails_with_incorrect_current_password(): void
     {
-        $admin = $this->createAdmin(['password' => 'oldpassword123']);
+        $admin = $this->createSuperAdmin(['password' => 'oldpassword123']);
 
         $response = $this->actingAs($admin)->post('/admin/profile/password', [
             'current_password' => 'wrongpassword',
@@ -112,6 +112,35 @@ class AdminSettingsAccountTest extends TestCase
 
         $admin->refresh();
         $this->assertTrue(Hash::check('oldpassword123', $admin->password));
+    }
+
+    public function test_branch_admin_cannot_access_change_password_or_admin_users_tab(): void
+    {
+        $superAdmin = $this->createSuperAdmin(['name' => 'Visible Super']);
+        $branchAdmin = $this->createAdmin(['password' => 'oldpassword123']);
+
+        // Branch admin cannot submit password change endpoint
+        $this->actingAs($branchAdmin)->post('/admin/profile/password', [
+            'current_password' => 'oldpassword123',
+            'new_password' => 'newpassword456',
+            'new_password_confirmation' => 'newpassword456',
+        ])->assertStatus(403);
+
+        $this->assertTrue(Hash::check('oldpassword123', $branchAdmin->fresh()->password));
+
+        // Settings page hides Change Password, Admin Users tab, and Super-Admin branch management controls
+        $response = $this->actingAs($branchAdmin)->get('/admin/settings');
+        $response->assertStatus(200);
+        $response->assertSee('My Admin Account');
+        $response->assertSee('name="email"', false);
+        $response->assertDontSee('Change Password');
+        $response->assertDontSee('data-tab="admins"', false);
+        $response->assertDontSee('Admin Staff Accounts');
+        $response->assertDontSee('id="addAdminModal"', false);
+        $response->assertDontSee('id="addBranchModal"', false);
+        $response->assertDontSee('Add New Branch');
+        $response->assertDontSee('Deactivate');
+        $response->assertDontSee('Visible Super');
     }
 
     public function test_super_admin_can_reset_branch_admin_password(): void

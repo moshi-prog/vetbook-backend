@@ -683,7 +683,7 @@
                 if (!document.hidden) {
                     checkAdminAlerts();
                 }
-            }, 15000);
+            }, 30000);
         });
     </script>
     @yield('scripts')

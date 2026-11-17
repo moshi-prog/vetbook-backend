@@ -326,9 +326,11 @@
     <button type="button" class="settings-tab-btn" data-tab="sms">
         <i class="fas fa-comment-sms"></i> SMS Templates
     </button>
+    @if(auth()->user()->branch === null)
     <button type="button" class="settings-tab-btn" data-tab="admins">
         <i class="fas fa-users-gear"></i> Admin Users
     </button>
+    @endif
     <button type="button" class="settings-tab-btn" data-tab="preferences">
         <i class="fas fa-user-gear"></i> Preferences &amp; Account
     </button>
@@ -363,20 +365,55 @@
                     <input type="email" name="email" class="f-input" value="{{ $clinic['email'] }}" required>
                 </div>
 
-                @if(auth()->user()->branch === null)
-                    {{-- Super Admin: Dedicated controls for BOTH branch hotlines --}}
+                @php
+                    $isSuperAdmin = auth()->user()->branch === null;
+                    $ownBranchKey = (!$isSuperAdmin && stripos(auth()->user()->branch, 'batangas') !== false) ? 'batangas' : 'mabini';
+                    $ownBranchLabel = $ownBranchKey === 'batangas' ? 'Batangas City Branch' : 'Mabini Branch';
+                    $mabiniPhoneVal = \App\Models\ClinicSetting::get('branch_mabini_phone', '0917-123-4567');
+                    $batangasPhoneVal = \App\Models\ClinicSetting::get('branch_batangas_phone', '0918-765-4321');
+                    $mabiniAddressVal = \App\Models\ClinicSetting::get('branch_mabini_address', '142 Mabini St., Poblacion, Mabini, Batangas');
+                    $batangasAddressVal = \App\Models\ClinicSetting::get('branch_batangas_address', 'N.F. Almario Bldg, Kumintang Ilaya, Batangas City');
+                @endphp
+
+                @if($isSuperAdmin)
+                    <div class="col-md-6">
+                        <label class="f-label">General Clinic Hotline</label>
+                        <input type="text" name="phone" class="f-input" value="{{ $clinic['phone'] }}" maxlength="50">
+                        <div class="f-help">Clinic-wide general support line shown on printed multi-branch reports.</div>
+                    </div>
                     <div class="col-md-6">
                         <label class="f-label">Mabini Branch Support Hotline</label>
-                        <input type="text" name="branch_mabini_phone" class="f-input" value="{{ \App\Models\ClinicSetting::get('branch_mabini_phone', '0917-123-4567') }}" required maxlength="30">
+                        <input type="text" name="branch_mabini_phone" class="f-input" value="{{ $mabiniPhoneVal }}" required maxlength="30">
                         <div class="f-help">Direct mobile dialer hotline for Mabini Branch.</div>
                     </div>
                     <div class="col-md-6">
                         <label class="f-label">Batangas City Branch Support Hotline</label>
-                        <input type="text" name="branch_batangas_phone" class="f-input" value="{{ \App\Models\ClinicSetting::get('branch_batangas_phone', '0918-765-4321') }}" required maxlength="30">
+                        <input type="text" name="branch_batangas_phone" class="f-input" value="{{ $batangasPhoneVal }}" required maxlength="30">
                         <div class="f-help">Direct mobile dialer hotline for Batangas City Branch.</div>
                     </div>
-                    <input type="hidden" name="phone" value="{{ $clinic['phone'] }}">
+                    <div class="col-md-6">
+                        <label class="f-label">Mabini Branch Address</label>
+                        <input type="text" name="branch_mabini_address" class="f-input" value="{{ $mabiniAddressVal }}" maxlength="255">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="f-label">Batangas City Branch Address</label>
+                        <input type="text" name="branch_batangas_address" class="f-input" value="{{ $batangasAddressVal }}" maxlength="255">
+                    </div>
                 @else
+                    <div class="col-md-6">
+                        <label class="f-label">{{ $ownBranchLabel }} Contact Number</label>
+                        <input type="text" name="branch_{{ $ownBranchKey }}_phone" class="f-input"
+                               value="{{ $ownBranchKey === 'batangas' ? $batangasPhoneVal : $mabiniPhoneVal }}"
+                               required maxlength="30">
+                        <div class="f-help">Direct hotline shown to pet owners and the AI assistant for {{ $ownBranchLabel }}.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="f-label">{{ $ownBranchLabel }} Address</label>
+                        <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px;">
+                            <span class="text-truncate">{{ $ownBranchKey === 'batangas' ? $batangasAddressVal : $mabiniAddressVal }}</span>
+                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Branch address is managed exclusively by Super Admin</span>
+                        </div>
+                    </div>
                     <input type="hidden" name="phone" value="{{ $clinic['phone'] }}">
                 @endif
 
@@ -460,9 +497,11 @@
                 <h3 class="section-title"><i class="fas fa-location-dot text-success"></i> Clinic Branches</h3>
                 <div class="section-desc">Manage physical clinic stations in Mabini and Batangas City.</div>
             </div>
+            @if(auth()->user()->branch === null)
             <button type="button" class="btn-green-save" data-bs-toggle="modal" data-bs-target="#addBranchModal">
                 <i class="fas fa-plus"></i> Add New Branch
             </button>
+            @endif
         </div>
 
         @foreach($branches as $branch)
@@ -479,21 +518,29 @@
                     <div class="small text-secondary"><i class="fas fa-clock me-1"></i> {{ $branch['hours'] }}</div>
                 </div>
                 <div class="d-flex gap-2">
-                    @if(auth()->user()->branch === null)
+                    @php
+                        $canEditThisBranch = auth()->user()->branch === null ||
+                            ((stripos(auth()->user()->branch, 'batangas') !== false ? 'batangas' : 'mabini') === $branch['key']);
+                    @endphp
+                    @if($canEditThisBranch)
                     <button type="button" class="btn-soft" data-bs-toggle="modal" data-bs-target="#editBranchModal-{{ $branch['key'] }}">
                         <i class="fas fa-pen"></i> Edit
                     </button>
                     @endif
+                    @if(auth()->user()->branch === null)
                     <button type="button" class="btn-soft text-danger" onclick="confirm('Are you sure you want to deactivate {{ $branch['name'] }}?')">
                         <i class="fas fa-power-off"></i> Deactivate
                     </button>
+                    @endif
                 </div>
             </div>
         @endforeach
 
+        @if(auth()->user()->branch === null)
         <div class="add-branch-dashed" data-bs-toggle="modal" data-bs-target="#addBranchModal">
             <i class="fas fa-plus-circle me-1"></i> Add Another Clinic Branch Location
         </div>
+        @endif
     </div>
 </div>
 
@@ -631,8 +678,9 @@
 </div>
 
 {{-- ========================================================= --}}
-{{-- TAB 5: ADMIN USERS --}}
+{{-- TAB 5: ADMIN USERS (Super Admin ONLY) --}}
 {{-- ========================================================= --}}
+@if(auth()->user()->branch === null)
 <div class="tab-pane" id="tab-admins">
     <div class="settings-card">
         <div class="section-head">
@@ -670,20 +718,19 @@
                         Created {{ $admin->created_at ? $admin->created_at->format('M d, Y') : 'System Seed' }}
                     </div>
                     <div class="d-flex gap-2">
-                        @if(auth()->user()->branch === null)
-                            <button type="button" class="btn-soft text-success" data-bs-toggle="modal" data-bs-target="#editAdminModal-{{ $admin->id }}">
-                                <i class="fas fa-pen"></i> Edit
-                            </button>
-                            <button type="button" class="btn-soft text-primary" data-bs-toggle="modal" data-bs-target="#resetAdminModal-{{ $admin->id }}">
-                                <i class="fas fa-key"></i> Reset Password
-                            </button>
-                        @endif
+                        <button type="button" class="btn-soft text-success" data-bs-toggle="modal" data-bs-target="#editAdminModal-{{ $admin->id }}">
+                            <i class="fas fa-pen"></i> Edit
+                        </button>
+                        <button type="button" class="btn-soft text-primary" data-bs-toggle="modal" data-bs-target="#resetAdminModal-{{ $admin->id }}">
+                            <i class="fas fa-key"></i> Reset Password
+                        </button>
                     </div>
                 </div>
             @endforeach
         </div>
     </div>
 </div>
+@endif
 
 {{-- ========================================================= --}}
 {{-- TAB 6: PREFERENCES & ACCOUNT --}}
@@ -719,6 +766,7 @@
                 <div class="col-md-6">
                     <label class="f-label">Personal Admin Mobile Number</label>
                     <input type="text" name="phone_number" class="f-input @error('phone_number') is-invalid @enderror" value="{{ old('phone_number', auth()->user()->phone_number) }}" placeholder="e.g. 09171234567">
+                    <div class="f-help">Personal staff contact only. To update your branch clinic hotline for pet owners and the AI chatbot, use Clinic Information or Branches.</div>
                     @error('phone_number')
                         <div class="text-danger small mt-1">{{ $message }}</div>
                     @enderror
@@ -748,7 +796,8 @@
         </div>
     </form>
 
-    {{-- Card 2: Change Password --}}
+    {{-- Card 2: Change Password (Super Admin ONLY) --}}
+    @if(auth()->user()->branch === null)
     <form method="POST" action="{{ route('admin.profile.password') }}">
         @csrf
         <div class="settings-card">
@@ -785,6 +834,7 @@
             </div>
         </div>
     </form>
+    @endif
 
     {{-- Card 3: Regional & System Preferences --}}
     <form method="POST" action="{{ route('admin.settings.preferences') }}">
@@ -876,6 +926,7 @@
     </form>
 </div>
 
+@if(auth()->user()->branch === null)
 {{-- MODAL: ADD BRANCH --}}
 <div class="modal fade" id="addBranchModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -921,10 +972,15 @@
         </div>
     </div>
 </div>
+@endif
 
-{{-- MODALS: EDIT BRANCH HOTLINE (Super Admin only) --}}
-@if(auth()->user()->branch === null)
-    @foreach($branches as $branch)
+{{-- MODALS: EDIT BRANCH HOTLINE & ADDRESS --}}
+@foreach($branches as $branch)
+    @php
+        $canEditModal = auth()->user()->branch === null ||
+            ((stripos(auth()->user()->branch, 'batangas') !== false ? 'batangas' : 'mabini') === $branch['key']);
+    @endphp
+    @if($canEditModal)
         <div class="modal fade" id="editBranchModal-{{ $branch['key'] }}" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content" style="border-radius: 24px; border: none; padding: 12px;">
@@ -935,8 +991,19 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
-                            <label class="f-label">Branch Hotline</label>
-                            <input type="text" name="phone" class="f-input" value="{{ $branch['phone'] }}" required maxlength="30">
+                            <div class="mb-3">
+                                <label class="f-label">Branch Contact Number (Hotline)</label>
+                                <input type="text" name="phone" class="f-input" value="{{ $branch['phone'] }}" required maxlength="30">
+                            </div>
+                            <div>
+                                <label class="f-label">Branch Address</label>
+                                @if(auth()->user()->branch === null)
+                                    <input type="text" name="address" class="f-input" value="{{ $branch['address'] }}" maxlength="255">
+                                @else
+                                    <div class="f-input bg-light text-muted">{{ $branch['address'] }}</div>
+                                    <div class="f-help mt-1"><i class="fas fa-lock me-1"></i> Address can only be modified by Super Admin.</div>
+                                @endif
+                            </div>
                         </div>
                         <div class="modal-footer border-0">
                             <button type="button" class="btn-soft" data-bs-dismiss="modal">Cancel</button>
@@ -946,8 +1013,8 @@
                 </div>
             </div>
         </div>
-    @endforeach
-@endif
+    @endif
+@endforeach
 {{-- MODALS: RESET ADMIN PASSWORD & EDIT ADMIN (Super Admin only) --}}
 @if(auth()->user()->branch === null)
     @foreach($admins ?? $adminUsers as $admin)

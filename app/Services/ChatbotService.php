@@ -25,7 +25,6 @@ class ChatbotService
         // 2. Dynamic Clinic Identity from clinic_settings
         $clinicName = ClinicSetting::get('clinic_name') ?: ClinicSetting::get('name', 'BK Petaholic Animal Clinic');
         $clinicTagline = ClinicSetting::get('clinic_tagline') ?: ClinicSetting::get('tagline', 'Compassionate Care for Batangas Pets');
-        $clinicPhone = ClinicSetting::get('clinic_phone', '0917-123-4567');
         $clinicEmail = ClinicSetting::get('clinic_email', 'info@bkpetaholic.com');
 
         // 3. Dynamic Operating Hours from clinic_settings
@@ -44,6 +43,13 @@ class ChatbotService
         // 4. Branch Locations & Independent Hotlines
         $mabiniPhone = ClinicSetting::get('branch_mabini_phone', '0917-123-4567');
         $batangasPhone = ClinicSetting::get('branch_batangas_phone', '0918-765-4321');
+        $mabiniAddress = ClinicSetting::get('branch_mabini_address', '142 Mabini St., Poblacion, Mabini, Batangas');
+        $batangasAddress = ClinicSetting::get('branch_batangas_address', 'N.F. Almario Bldg, Kumintang Ilaya, Batangas City');
+
+        $configuredClinicPhone = trim((string) ClinicSetting::get('clinic_phone', ''));
+        $adminDeskLine = ($configuredClinicPhone !== '' && $configuredClinicPhone !== $mabiniPhone && $configuredClinicPhone !== $batangasPhone)
+            ? "General Admin Desk: {$configuredClinicPhone} | "
+            : '';
 
         $customSystemPrompt = trim((string) ClinicSetting::get('chatbot_system_prompt', ''));
         $introSection = $customSystemPrompt !== ''
@@ -56,18 +62,22 @@ class ChatbotService
             . "• Use this current time to determine if a branch is currently open or closed when the user asks.\n\n"
             . "OFFICIAL CLINIC LOCATIONS & REAL-TIME OPERATING HOURS:\n"
             . "1. Mabini Branch:\n"
-            . "   - Address: 142 Mabini St., Poblacion, Mabini, Batangas, Philippines\n"
+            . "   - Address: {$mabiniAddress}\n"
             . "   - Hotline / Mobile: {$mabiniPhone}\n"
             . "   - Hours (Monday to Friday): {$mabiniWeekday}\n"
             . "   - Hours (Saturday): {$mabiniSaturday}\n"
             . "   - Hours (Sunday): {$mabiniSunday}\n\n"
             . "2. Batangas City Branch:\n"
-            . "   - Address: N.F. Almario Bldg, Kumintang Ilaya, Batangas City, Batangas, Philippines\n"
+            . "   - Address: {$batangasAddress}\n"
             . "   - Hotline / Mobile: {$batangasPhone}\n"
             . "   - Hours (Monday to Friday): {$batangasWeekday}\n"
             . "   - Hours (Saturday): {$batangasSaturday}\n"
             . "   - Hours (Sunday): {$batangasSunday}\n\n"
-            . "General Support Hotline: {$clinicPhone} | Email: {$clinicEmail}\n\n"
+            . "Mabini Hotline: {$mabiniPhone} | Batangas City Hotline: {$batangasPhone}\n"
+            . "{$adminDeskLine}Email: {$clinicEmail}\n\n"
+            . "CONTACT & ADDRESS ACCURACY RULES:\n"
+            . "• Whenever asked for contact numbers, hotlines, or clinic addresses, always report the exact current Mabini Branch ({$mabiniPhone} | {$mabiniAddress}) and Batangas City Branch ({$batangasPhone} | {$batangasAddress}) values from above.\n"
+            . "• Never swap branches or invent outdated numbers.\n\n"
             . "SERVICES OFFERED:\n"
             . "• General veterinary consultations & health checkups\n"
             . "• Complete pet vaccinations (Anti-Rabies, 5-in-1, 6-in-1, 8-in-1 for dogs, 4-in-1 FVRCP for cats)\n"
@@ -82,7 +92,7 @@ class ChatbotService
             . "1. You are an AI assistant, NOT a licensed veterinarian. NEVER provide definitive medical diagnoses, drug dosages, or chemical treatment plans.\n"
             . "2. NEVER prescribe human medications (e.g. Paracetamol/Ibuprofen are toxic to pets).\n"
             . "3. For illness symptoms, offer only gentle comfort observations (keep the pet warm, hydrated, resting) and keep replies concise (2-3 short paragraphs max).\n"
-            . "4. For urgent red-flag symptoms (difficulty breathing, seizures, trauma, severe bleeding, continuous vomiting), immediately urge the owner to call the clinic hotline ({$clinicPhone}) or visit the nearest branch right away.\n"
+            . "4. For urgent red-flag symptoms (difficulty breathing, seizures, trauma, severe bleeding, continuous vomiting), immediately urge the owner to call Mabini Branch ({$mabiniPhone}) or Batangas City Branch ({$batangasPhone}) or visit the nearest branch right away.\n"
             . "5. End answers with a warm, encouraging invitation to visit BK Petaholic Animal Clinic or book an appointment in the app.\n";
 
         // 5. Live Pet Medicine & Stock Inventory

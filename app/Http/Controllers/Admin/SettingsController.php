@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ClinicSetting;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
@@ -13,9 +14,9 @@ class SettingsController extends Controller
 {
     public function index()
     {
-        $admins = User::where('role', 'admin')
-            ->orderBy('id')
-            ->get();
+        $admins = auth()->check() && auth()->user()->branch === null
+            ? User::where('role', 'admin')->orderBy('id')->get()
+            : collect();
         $adminUsers = $admins;
 
         $hoursWeekday = ClinicSetting::get('clinic_hours_weekday', '09:00 AM - 06:00 PM');
@@ -87,11 +88,14 @@ class SettingsController extends Controller
             return implode(' | ', $hoursParts);
         };
 
+        $mabiniAddress = ClinicSetting::get('branch_mabini_address', '142 Mabini St., Poblacion, Mabini, Batangas');
+        $batangasAddress = ClinicSetting::get('branch_batangas_address', 'N.F. Almario Bldg, Kumintang Ilaya, Batangas City');
+
         $branches = [
             [
                 'id' => 1,
                 'name' => 'Mabini Branch',
-                'address' => '142 Mabini St., Poblacion, Mabini, Batangas',
+                'address' => $mabiniAddress,
                 'key' => 'mabini',
                 'phone' => ClinicSetting::get('branch_mabini_phone', '0917-123-4567'),
                 'hours' => $formatBranchHours('mabini', 'Mon-Sat: 9:00 AM - 6:00 PM | Sun: 10:00 AM - 4:00 PM'),
@@ -100,7 +104,7 @@ class SettingsController extends Controller
             [
                 'id' => 2,
                 'name' => 'Batangas City Branch',
-                'address' => 'N.F. Almario Building, Kumintang Ilaya, Batangas City',
+                'address' => $batangasAddress,
                 'key' => 'batangas',
                 'phone' => ClinicSetting::get('branch_batangas_phone', '0918-765-4321'),
                 'hours' => $formatBranchHours('batangas', 'Mon-Sat: 9:00 AM - 6:00 PM | Sun: Closed'),
@@ -208,6 +212,8 @@ class SettingsController extends Controller
         $user->phone_number = $request->phone_number;
         $user->save();
 
+        $this->forgetBranchesCache();
+
         return back()->with('success', 'Account details updated successfully.');
     }
 
@@ -232,11 +238,26 @@ class SettingsController extends Controller
         $admin->branch = $request->branch ?: null;
         $admin->save();
 
+        $this->forgetBranchesCache();
+
         return back()->with('success', "Admin account for {$admin->name} updated successfully.");
+    }
+
+    private function forgetBranchesCache(): void
+    {
+        try {
+            Cache::store('file')->forget('api_branches_payload');
+        } catch (\Throwable $e) {
+            // Silently ignore unwritable file cache in restricted environments
+        }
     }
 
     public function changePassword(Request $request)
     {
+        if (auth()->user()->branch !== null) {
+            abort(403, 'Unauthorized. Only Super Admins can change admin passwords.');
+        }
+
         $request->validate([
             'current_password' => 'required',
             'new_password' => 'required|min:6|confirmed',
@@ -272,12 +293,25 @@ class SettingsController extends Controller
 
     public function updateClinic(Request $request)
     {
+        $ownKey = $this->ownBranchKey();
+
+        if ($ownKey !== null) {
+            $otherKey = $ownKey === 'mabini' ? 'batangas' : 'mabini';
+            foreach (['branch_mabini_address', 'branch_batangas_address', "branch_{$otherKey}_phone"] as $forbidden) {
+                if ($request->has($forbidden) && trim((string) $request->input($forbidden)) !== '') {
+                    abort(403, 'Unauthorized.');
+                }
+            }
+        }
+
         $rules = [
             'clinic_name' => 'required|string|max:255',
             'email' => 'required|email|max:255',
             'phone' => 'nullable|string|max:50',
             'branch_mabini_phone' => ['nullable', 'string', 'max:30', 'regex:/^[0-9+\-\s()]{7,30}$/'],
             'branch_batangas_phone' => ['nullable', 'string', 'max:30', 'regex:/^[0-9+\-\s()]{7,30}$/'],
+            'branch_mabini_address' => ['nullable', 'string', 'max:255'],
+            'branch_batangas_address' => ['nullable', 'string', 'max:255'],
             'tagline' => 'nullable|string|max:255',
             'accreditation' => 'nullable|string|max:255',
             'hours_weekday' => 'nullable|string|max:100',
@@ -332,13 +366,23 @@ class SettingsController extends Controller
             ClinicSetting::set('phone', $request->phone);
         }
 
-        // Only Super Admin can update branch hotlines
-        if (auth()->user()->branch === null) {
+        // Super Admin manages both branch hotlines & addresses; Branch Admin manages only their own hotline
+        if ($ownKey === null) {
             if ($request->filled('branch_mabini_phone')) {
                 ClinicSetting::set('branch_mabini_phone', trim($request->branch_mabini_phone));
             }
             if ($request->filled('branch_batangas_phone')) {
                 ClinicSetting::set('branch_batangas_phone', trim($request->branch_batangas_phone));
+            }
+            if ($request->filled('branch_mabini_address')) {
+                ClinicSetting::set('branch_mabini_address', trim($request->branch_mabini_address));
+            }
+            if ($request->filled('branch_batangas_address')) {
+                ClinicSetting::set('branch_batangas_address', trim($request->branch_batangas_address));
+            }
+        } else {
+            if ($request->filled("branch_{$ownKey}_phone")) {
+                ClinicSetting::set("branch_{$ownKey}_phone", trim((string) $request->input("branch_{$ownKey}_phone")));
             }
         }
 
@@ -391,22 +435,43 @@ class SettingsController extends Controller
         ];
         abort_unless(isset($branches[$branch]), 404);
 
-        $user = auth()->user();
-        if ($user->branch !== null && $user->branch !== '') {
-            $own = stripos($user->branch, 'mabini') !== false ? 'mabini'
-                : (stripos($user->branch, 'batangas') !== false ? 'batangas' : null);
-            if ($own !== $branch) {
-                abort(403, 'Unauthorized. You can only edit your assigned branch.');
-            }
+        $own = $this->ownBranchKey();
+        if ($own !== null && $own !== $branch) {
+            abort(403, 'Unauthorized. You can only edit your assigned branch.');
+        }
+
+        if ($own !== null && $request->has('address') && trim((string) $request->input('address')) !== '') {
+            abort(403, 'Unauthorized. Only Super Admins can change branch addresses.');
         }
 
         $request->validate([
             'phone' => ['required', 'string', 'max:30', 'regex:/^[0-9+\-\s()]{7,30}$/'],
+            'address' => ['nullable', 'string', 'max:255'],
         ]);
 
         ClinicSetting::set("branch_{$branch}_phone", trim($request->phone));
 
+        if ($own === null && $request->filled('address')) {
+            ClinicSetting::set("branch_{$branch}_address", trim((string) $request->address));
+        }
+
         return redirect(route('admin.settings.index') . '#branches')->with('success', 'Branch contact number updated successfully.');
+    }
+
+    private function ownBranchKey(): ?string
+    {
+        $userBranch = auth()->user()?->branch;
+        if ($userBranch === null || trim($userBranch) === '') {
+            return null;
+        }
+        if (stripos($userBranch, 'batangas') !== false) {
+            return 'batangas';
+        }
+        if (stripos($userBranch, 'mabini') !== false) {
+            return 'mabini';
+        }
+
+        return null;
     }
 
     public function updateChatbot(Request $request)

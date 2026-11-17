@@ -3,6 +3,7 @@ set -e
 
 # Create required directories for Laravel and Supervisor logs
 mkdir -p /var/log/supervisor storage/framework/cache/data storage/framework/sessions storage/framework/views
+chown -R www-data:www-data storage bootstrap/cache && chmod -R 775 storage bootstrap/cache
 
 echo "==> Preparing Laravel for production..."
 
@@ -19,6 +20,11 @@ php artisan view:cache || true
 # Run database migrations
 echo "==> Running database migrations..."
 php artisan migrate --force || true
+
+# Compress any existing oversized Base64 avatars or logos in DB
+php artisan vetbook:compress-images --quiet || true
+
+chown -R www-data:www-data storage bootstrap/cache && chmod -R 775 storage bootstrap/cache
 
 # Start Supervisor (which manages Nginx + PHP-FPM)
 echo "==> Starting web server..."

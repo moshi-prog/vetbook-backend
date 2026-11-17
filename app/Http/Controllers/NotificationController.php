@@ -21,7 +21,7 @@ class NotificationController extends Controller
         $notifications = AppNotification::where('user_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->limit(30)
-            ->get();
+            ->get(['id', 'user_id', 'title', 'message', 'type', 'data', 'read_at', 'created_at']);
 
         $unreadCount = AppNotification::where('user_id', $user->id)
             ->whereNull('read_at')

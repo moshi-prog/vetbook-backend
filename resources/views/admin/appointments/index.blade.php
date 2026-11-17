@@ -498,8 +498,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Poll every 12 seconds
-    setInterval(checkLatestAppointment, 12000);
+    // Poll every 30 seconds when tab is visible
+    setInterval(function () {
+        if (!document.hidden) {
+            checkLatestAppointment();
+        }
+    }, 30000);
 });
 </script>
 

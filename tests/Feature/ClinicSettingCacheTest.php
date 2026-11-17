@@ -76,5 +76,30 @@ class ClinicSettingCacheTest extends TestCase
         $row->delete();
         $this->assertNull(ClinicSetting::get('direct_key'));
     }
+
+    public function test_bulk_cache_excludes_clinic_logo_data_and_loads_it_only_on_direct_lookup(): void
+    {
+        ClinicSetting::set('clinic_name', 'VetBook Egress Safe');
+        ClinicSetting::set('clinic_logo', 'clinic/logo_missing.png');
+        ClinicSetting::set('clinic_logo_data', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+
+        ClinicSetting::clearCache();
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        // Reading regular settings queries once and excludes clinic_logo_data
+        $this->assertSame('VetBook Egress Safe', ClinicSetting::get('clinic_name'));
+        $this->assertSame('clinic/logo_missing.png', ClinicSetting::get('clinic_logo'));
+
+        $queriesBeforeLogoData = DB::getQueryLog();
+        $this->assertCount(1, $queriesBeforeLogoData);
+        $this->assertContains('clinic_logo_data', $queriesBeforeLogoData[0]['bindings']);
+
+        // Direct lookup of clinic_logo_data fetches it directly
+        $backup = ClinicSetting::get('clinic_logo_data');
+        DB::disableQueryLog();
+
+        $this->assertStringStartsWith('data:image/png;base64,', $backup);
+    }
 }
 

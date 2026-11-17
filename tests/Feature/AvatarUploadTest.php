@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\ClinicSetting;
 use App\Models\Pet;
 use App\Models\User;
+use App\Services\AvatarService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -178,5 +180,32 @@ class AvatarUploadTest extends TestCase
         $pet = Pet::find($response->json('pet.id'));
         $this->assertNotNull($pet);
         $this->assertSame($largeDataUri, $pet->avatar_url);
+    }
+
+    public function test_optimize_data_uri_and_compress_images_command_run_safely(): void
+    {
+        // Leaves non-data URLs and small <= 50KB data URIs untouched
+        $this->assertSame('https://example.com/avatar.png', AvatarService::optimizeDataUri('https://example.com/avatar.png'));
+        $this->assertSame($this->sampleBase64Png, AvatarService::optimizeDataUri($this->sampleBase64Png));
+
+        $user = User::create([
+            'name' => 'Command User',
+            'email' => 'cmd@vetbook.test',
+            'password' => bcrypt('password'),
+            'role' => 'pet_owner',
+            'avatar_url' => $this->sampleBase64Png,
+        ]);
+
+        Pet::create([
+            'user_id' => $user->id,
+            'name' => 'Rocky',
+            'species' => 'Dog',
+            'avatar_url' => 'data:image/png;base64,' . str_repeat('A', 70000),
+        ]);
+
+        ClinicSetting::set('clinic_logo_data', 'data:image/png;base64,' . str_repeat('B', 70000));
+
+        $this->artisan('vetbook:compress-images')
+            ->assertExitCode(0);
     }
 }

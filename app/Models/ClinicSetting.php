@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class ClinicSetting extends Model
 {
@@ -22,16 +23,45 @@ class ClinicSetting extends Model
     {
         static::saved(function () {
             static::$cache = null;
+            static::forgetFileCache();
         });
         static::deleted(function () {
             static::$cache = null;
+            static::forgetFileCache();
         });
+    }
+
+    protected static function forgetFileCache(): void
+    {
+        if (app()->runningUnitTests()) {
+            return;
+        }
+
+        try {
+            $store = Cache::store('file');
+            $store->forget('clinic_settings_all');
+            $store->forget('api_branches_payload');
+        } catch (\Throwable $e) {
+            // Silently ignore unwritable file cache in restricted environments
+        }
     }
 
     protected static function loadCache(): array
     {
         if (static::$cache === null) {
-            static::$cache = static::pluck('value', 'key')->all();
+            $fetch = static fn (): array => static::where('key', '!=', 'clinic_logo_data')
+                ->pluck('value', 'key')
+                ->all();
+
+            if (!app()->runningUnitTests()) {
+                try {
+                    static::$cache = Cache::store('file')->remember('clinic_settings_all', 300, $fetch);
+                } catch (\Throwable $e) {
+                    static::$cache = $fetch();
+                }
+            } else {
+                static::$cache = $fetch();
+            }
         }
 
         return static::$cache;
@@ -40,6 +70,7 @@ class ClinicSetting extends Model
     public static function clearCache(): void
     {
         static::$cache = null;
+        static::forgetFileCache();
     }
 
     /**
@@ -51,6 +82,11 @@ class ClinicSetting extends Model
      */
     public static function get(string $key, $default = null)
     {
+        if ($key === 'clinic_logo_data') {
+            $val = static::where('key', 'clinic_logo_data')->value('value');
+            return ($val !== null && $val !== '') ? $val : $default;
+        }
+
         $all = static::loadCache();
 
         if (array_key_exists($key, $all) && $all[$key] !== null && $all[$key] !== '') {
@@ -76,9 +112,11 @@ class ClinicSetting extends Model
             ['value' => $stored]
         );
 
+        static::forgetFileCache();
+
         // The saved hook resets the cache; reload lazily on next read, but
         // seed it now if it was warm so same-request reads are fresh.
-        if (static::$cache !== null) {
+        if (static::$cache !== null && $key !== 'clinic_logo_data') {
             static::$cache[$key] = $stored;
         }
 

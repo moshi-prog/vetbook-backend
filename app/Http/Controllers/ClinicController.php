@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ClinicSetting;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 
 class ClinicController extends Controller
 {
@@ -13,21 +14,43 @@ class ClinicController extends Controller
      */
     public function getBranches(): JsonResponse
     {
+        if (!app()->runningUnitTests()) {
+            try {
+                $payload = Cache::store('file')->remember('api_branches_payload', 300, fn (): array => $this->buildBranchesPayload());
+            } catch (\Throwable $e) {
+                $payload = $this->buildBranchesPayload();
+            }
+        } else {
+            $payload = $this->buildBranchesPayload();
+        }
+
+        return response()->json($payload)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    }
+
+    private function buildBranchesPayload(): array
+    {
         // Each branch hotline is stored independently; there is intentionally no
         // cross-branch, global hotline, or admin-phone fallback.
         $mabiniPhone = ClinicSetting::get('branch_mabini_phone', '0917-123-4567');
         $batangasPhone = ClinicSetting::get('branch_batangas_phone', '0918-765-4321');
+        $mabiniAddress = ClinicSetting::get('branch_mabini_address', '142 Mabini St., Poblacion, Mabini, Batangas');
+        $batangasAddress = ClinicSetting::get('branch_batangas_address', 'N.F. Almario Bldg, Kumintang Ilaya, Batangas City');
+
+        $summarizeAddress = static function (string $addr): string {
+            return trim((string) preg_replace('/,\s*(Batangas City|Batangas)\s*$/i', '', trim($addr)));
+        };
 
         $mabiniAdmin = User::where('role', 'admin')
             ->where(function ($q) {
                 $q->where('branch', 'like', '%Mabini%')->orWhere('branch', 'mabini');
             })
-            ->first();
+            ->first(['id', 'name', 'branch']);
         $batangasAdmin = User::where('role', 'admin')
             ->where(function ($q) {
                 $q->where('branch', 'like', '%Batangas%')->orWhere('branch', 'batangas_city');
             })
-            ->first();
+            ->first(['id', 'name', 'branch']);
         // Helper to normalize phone number to standard 11-digit 09XXXXXXXXX
         $normalizePhone = function ($phone) {
             $digits = preg_replace('/[^0-9]/', '', (string)$phone);
@@ -157,8 +180,8 @@ class ClinicController extends Controller
             [
                 'id' => 'mabini',
                 'name' => 'Mabini Branch',
-                'address' => '142 Mabini St., Poblacion, Mabini, Batangas',
-                'addressSummary' => '142 Mabini St., Poblacion, Mabini',
+                'address' => $mabiniAddress,
+                'addressSummary' => $summarizeAddress($mabiniAddress),
                 'hoursWeekday' => $mabiniHours['hoursWeekday'],
                 'hoursSunday' => $mabiniHours['hoursSunday'],
                 'weekday_open' => $mabiniHours['weekday_open'],
@@ -176,8 +199,8 @@ class ClinicController extends Controller
             [
                 'id' => 'batangas_city',
                 'name' => 'Batangas City Branch',
-                'address' => 'N.F. Almario Bldg, Kumintang Ilaya, Batangas City',
-                'addressSummary' => 'N.F. Almario Bldg, Kumintang Ilaya',
+                'address' => $batangasAddress,
+                'addressSummary' => $summarizeAddress($batangasAddress),
                 'hoursWeekday' => $batangasHours['hoursWeekday'],
                 'hoursSunday' => $batangasHours['hoursSunday'],
                 'weekday_open' => $batangasHours['weekday_open'],
@@ -204,11 +227,11 @@ class ClinicController extends Controller
             'logo_url' => $logoUrl,
         ];
 
-        return response()->json([
+        return [
             'status' => 'success',
             'data' => $branches,
             'clinic' => $clinic,
-        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        ];
     }
 
     public function getClinicInfo(): JsonResponse

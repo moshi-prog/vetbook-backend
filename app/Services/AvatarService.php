@@ -12,6 +12,9 @@ class AvatarService
 {
     private const ALLOWED_EXTENSIONS = ['jpeg', 'jpg', 'png', 'webp', 'gif'];
     private const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
+    private const MAX_DIMENSION = 320;
+    private const JPEG_QUALITY = 78;
+    private const SKIP_OPTIMIZE_MAX_BYTES = 51200; // Preserve already-tiny <=50KB images inside 320x320
 
     /**
      * Persist avatar image data as a durable data URI in the database while
@@ -44,9 +47,11 @@ class AvatarService
             $extension = in_array($ext, self::ALLOWED_EXTENSIONS, true) ? $ext : 'jpg';
             $mimeSubtype = $extension === 'jpg' ? 'jpeg' : $extension;
 
-            self::cacheToPublicDisk($folder, $prefix, $extension, $contents);
+            [$optimized, $extension, $mimeSubtype] = self::optimizeAvatar($contents, $extension, $mimeSubtype);
 
-            $dataUri = 'data:image/' . $mimeSubtype . ';base64,' . base64_encode($contents);
+            self::cacheToPublicDisk($folder, $prefix, $extension, $optimized);
+
+            $dataUri = 'data:image/' . $mimeSubtype . ';base64,' . base64_encode($optimized);
             return [true, $dataUri, null];
         }
 
@@ -76,10 +81,11 @@ class AvatarService
 
                 $extension = $imageType === 'jpeg' ? 'jpg' : $imageType;
                 $mimeSubtype = $imageType === 'jpg' ? 'jpeg' : $imageType;
-                self::cacheToPublicDisk($folder, $prefix, $extension, $decoded);
+                [$optimized, $extension, $mimeSubtype] = self::optimizeAvatar($decoded, $extension, $mimeSubtype);
+                self::cacheToPublicDisk($folder, $prefix, $extension, $optimized);
 
                 // Return the data URI directly so PostgreSQL persists the photo across ephemeral container restarts
-                $dataUri = 'data:image/' . $mimeSubtype . ';base64,' . $base64Data;
+                $dataUri = 'data:image/' . $mimeSubtype . ';base64,' . base64_encode($optimized);
                 return [true, $dataUri, null];
             }
 
@@ -90,6 +96,132 @@ class AvatarService
         }
 
         return [false, null, 'An avatar image file or valid image data string is required.'];
+    }
+
+    /**
+     * Compress an existing Base64 image data URI when larger than threshold and GD is available.
+     */
+    public static function optimizeDataUri(string $dataUri): string
+    {
+        $trimmed = trim($dataUri);
+        if ($trimmed === '' || !preg_match('/^data:image\/([a-zA-Z0-9.+-]+);base64,(.+)$/s', $trimmed, $matches)) {
+            return $dataUri;
+        }
+
+        $imageType = strtolower($matches[1]);
+        if (!in_array($imageType, self::ALLOWED_EXTENSIONS, true)) {
+            return $dataUri;
+        }
+
+        $base64Data = preg_replace('/\s+/', '', $matches[2]);
+        $decoded = base64_decode($base64Data, true);
+
+        if ($decoded === false || $decoded === '' || strlen($decoded) > self::MAX_BYTES) {
+            return $dataUri;
+        }
+
+        if (strlen($decoded) <= self::SKIP_OPTIMIZE_MAX_BYTES) {
+            return $dataUri;
+        }
+
+        $extension = $imageType === 'jpeg' ? 'jpg' : $imageType;
+        $mimeSubtype = $imageType === 'jpg' ? 'jpeg' : $imageType;
+
+        [$optimized, , $outMime] = self::optimizeAvatar($decoded, $extension, $mimeSubtype);
+
+        $result = 'data:image/' . $outMime . ';base64,' . base64_encode($optimized);
+
+        return strlen($result) < strlen($dataUri) ? $result : $dataUri;
+    }
+
+    /**
+     * Proportionally resize & compress oversized avatar binaries within 320x320 via GD when available.
+     *
+     * @return array{0: string, 1: string, 2: string} [binary, extension, mimeSubtype]
+     */
+    private static function optimizeAvatar(string $binary, string $extension, string $mimeSubtype): array
+    {
+        if (!function_exists('imagecreatefromstring') || !function_exists('imagecreatetruecolor') || !function_exists('imagecopyresampled')) {
+            return [$binary, $extension, $mimeSubtype];
+        }
+
+        try {
+            $src = @imagecreatefromstring($binary);
+            if ($src === false) {
+                return [$binary, $extension, $mimeSubtype];
+            }
+
+            $origW = imagesx($src);
+            $origH = imagesy($src);
+            if ($origW <= 0 || $origH <= 0) {
+                return [$binary, $extension, $mimeSubtype];
+            }
+
+            if ($origW <= self::MAX_DIMENSION && $origH <= self::MAX_DIMENSION && strlen($binary) <= self::SKIP_OPTIMIZE_MAX_BYTES) {
+                return [$binary, $extension, $mimeSubtype];
+            }
+
+            $scale = min(self::MAX_DIMENSION / $origW, self::MAX_DIMENSION / $origH, 1.0);
+            $targetW = max(1, (int) round($origW * $scale));
+            $targetH = max(1, (int) round($origH * $scale));
+
+            $dst = imagecreatetruecolor($targetW, $targetH);
+            if ($dst === false) {
+                return [$binary, $extension, $mimeSubtype];
+            }
+
+            $outExt = $extension;
+            $outMime = $mimeSubtype;
+            $preserveAlpha = in_array($extension, ['png', 'gif', 'webp'], true);
+
+            if ($preserveAlpha) {
+                imagealphablending($dst, false);
+                imagesavealpha($dst, true);
+                $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+                imagefilledrectangle($dst, 0, 0, $targetW, $targetH, $transparent);
+            }
+
+            imagecopyresampled($dst, $src, 0, 0, 0, 0, $targetW, $targetH, $origW, $origH);
+
+            ob_start();
+            $encodedOk = false;
+
+            if ($extension === 'gif' && function_exists('imagegif')) {
+                $encodedOk = imagegif($dst);
+                $outExt = 'gif';
+                $outMime = 'gif';
+            } elseif ($extension === 'webp' && function_exists('imagewebp')) {
+                $encodedOk = imagewebp($dst, null, self::JPEG_QUALITY);
+                $outExt = 'webp';
+                $outMime = 'webp';
+            } elseif ($extension === 'png' && function_exists('imagepng')) {
+                $encodedOk = imagepng($dst, null, 6);
+                $outExt = 'png';
+                $outMime = 'png';
+            } elseif (function_exists('imagejpeg')) {
+                $encodedOk = imagejpeg($dst, null, self::JPEG_QUALITY);
+                $outExt = 'jpg';
+                $outMime = 'jpeg';
+            }
+
+            $encoded = ob_get_clean();
+
+            if (
+                $encodedOk &&
+                is_string($encoded) &&
+                $encoded !== '' &&
+                ($origW > self::MAX_DIMENSION || $origH > self::MAX_DIMENSION || strlen($encoded) < strlen($binary))
+            ) {
+                return [$encoded, $outExt, $outMime];
+            }
+        } catch (\Throwable $e) {
+            if (ob_get_level() > 0) {
+                @ob_end_clean();
+            }
+            Log::warning('Avatar GD compression skipped: ' . $e->getMessage());
+        }
+
+        return [$binary, $extension, $mimeSubtype];
     }
 
     /**

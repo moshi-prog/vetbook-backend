@@ -20,19 +20,25 @@ class ReportService
 
         $currentBranch = $branch ?? (auth()->check() ? auth()->user()->branch : null);
 
+        // Live branch addresses & contact numbers
+        $mabiniPhone = ClinicSetting::get('branch_mabini_phone', '0917-123-4567');
+        $batangasPhone = ClinicSetting::get('branch_batangas_phone', '0918-765-4321');
+        $mabiniAddress = ClinicSetting::get('branch_mabini_address', '142 Mabini St., Poblacion, Mabini, Batangas');
+        $batangasAddress = ClinicSetting::get('branch_batangas_address', 'N.F. Almario Bldg, Kumintang Ilaya, Batangas City');
+
         // Branch address, phone, and display name
-        $address = '142 Mabini St., Poblacion, Mabini, Batangas & Kumintang Ilaya, Batangas City';
+        $address = "{$mabiniAddress} & {$batangasAddress}";
         $phone = ClinicSetting::get('clinic_phone', '+63 917 123 4567');
         $branchTitle = 'All Branches';
 
         if ($currentBranch) {
             $branchTitle = $currentBranch;
             if (stripos($currentBranch, 'batangas') !== false) {
-                $address = 'N.F. Almario Building, Kumintang Ilaya, Batangas City';
-                $phone = ClinicSetting::get('branch_batangas_phone', '0918-765-4321');
+                $address = $batangasAddress;
+                $phone = $batangasPhone;
             } else {
-                $address = '142 Mabini St., Poblacion, Mabini, Batangas';
-                $phone = ClinicSetting::get('branch_mabini_phone', '0917-123-4567');
+                $address = $mabiniAddress;
+                $phone = $mabiniPhone;
             }
         }
 

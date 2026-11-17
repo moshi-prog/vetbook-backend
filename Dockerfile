@@ -5,7 +5,7 @@ RUN apk add --no-cache bash nginx supervisor curl
 
 # Install PHP extensions using official installer
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
-RUN install-php-extensions pdo_pgsql pdo_mysql intl zip opcache bcmath
+RUN install-php-extensions pdo_pgsql pdo_mysql intl zip opcache bcmath gd
 
 # Copy composer from official image
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

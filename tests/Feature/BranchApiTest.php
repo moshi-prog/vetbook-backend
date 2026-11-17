@@ -6,6 +6,7 @@ use App\Models\ClinicSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -293,5 +294,24 @@ class BranchApiTest extends TestCase
         $this->assertSame('09:00', $mabini['saturday_open']);
         $this->assertSame('15:00', $mabini['saturday_close']);
         $this->assertFalse($mabini['saturday_closed']);
+    }
+
+    public function test_branches_endpoint_does_not_select_admin_avatar_column(): void
+    {
+        $this->admin('Mabini Branch');
+        $this->admin('Batangas City Branch');
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->getJson('/api/branches')->assertStatus(200);
+        $userQueries = collect(DB::getQueryLog())
+            ->filter(fn ($q) => str_contains($q['query'], '"users"') || str_contains($q['query'], 'from `users`') || str_contains($q['query'], 'from users'));
+        DB::disableQueryLog();
+
+        $this->assertNotEmpty($userQueries);
+        foreach ($userQueries as $q) {
+            $this->assertStringNotContainsString('avatar_url', $q['query']);
+            $this->assertStringContainsString('name', $q['query']);
+        }
     }
 }
