@@ -51,7 +51,7 @@ class AdminSettingsAccountTest extends TestCase
 
     public function test_admin_can_update_profile_name_and_email(): void
     {
-        $admin = $this->createAdmin();
+        $admin = $this->createSuperAdmin();
 
         $response = $this->actingAs($admin)->post('/admin/profile/update', [
             'name' => 'Updated Admin Name',
@@ -70,8 +70,8 @@ class AdminSettingsAccountTest extends TestCase
 
     public function test_admin_profile_update_validates_unique_email(): void
     {
-        $admin1 = $this->createAdmin(['email' => 'admin1@vetbook.test']);
-        $admin2 = $this->createSuperAdmin(['email' => 'admin2@vetbook.test']);
+        $admin1 = $this->createSuperAdmin(['email' => 'admin1@vetbook.test']);
+        $admin2 = $this->createAdmin(['email' => 'admin2@vetbook.test']);
 
         $response = $this->actingAs($admin1)->post('/admin/profile/update', [
             'name' => 'Admin One',
@@ -79,6 +79,40 @@ class AdminSettingsAccountTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors('email');
+    }
+
+    public function test_branch_admin_cannot_change_email_in_preferences_and_can_update_name_and_phone(): void
+    {
+        $branchAdmin = $this->createAdmin(['email' => 'branch.locked@vetbook.test']);
+
+        // View renders locked email badge and omits name="email" inside #tab-preferences
+        $view = $this->actingAs($branchAdmin)->get('/admin/settings');
+        $view->assertStatus(200);
+        $html = $view->getContent();
+        $this->assertSame(1, preg_match('/id="tab-preferences"[\s\S]*$/', $html, $matches));
+        $prefsHtml = $matches[0];
+        $this->assertStringContainsString('branch.locked@vetbook.test', $prefsHtml);
+        $this->assertStringContainsString('Email is managed exclusively by Super Admin', $prefsHtml);
+        $this->assertStringNotContainsString('name="email"', $prefsHtml);
+
+        // Saving name & personal phone without email succeeds
+        $this->actingAs($branchAdmin)->post('/admin/profile/update', [
+            'name' => 'Branch Staff Updated',
+            'phone_number' => '09179990001',
+        ])->assertRedirect()->assertSessionHas('success', 'Account details updated successfully.');
+
+        $branchAdmin->refresh();
+        $this->assertSame('Branch Staff Updated', $branchAdmin->name);
+        $this->assertSame('09179990001', $branchAdmin->phone_number);
+        $this->assertSame('branch.locked@vetbook.test', $branchAdmin->email);
+
+        // Attempting to forge a different email returns 403
+        $this->actingAs($branchAdmin)->post('/admin/profile/update', [
+            'name' => 'Branch Staff Updated',
+            'email' => 'hijacked@vetbook.test',
+        ])->assertStatus(403);
+
+        $this->assertSame('branch.locked@vetbook.test', $branchAdmin->fresh()->email);
     }
 
     public function test_admin_can_change_password_with_valid_current_password(): void
@@ -132,7 +166,7 @@ class AdminSettingsAccountTest extends TestCase
         $response = $this->actingAs($branchAdmin)->get('/admin/settings');
         $response->assertStatus(200);
         $response->assertSee('My Admin Account');
-        $response->assertSee('name="email"', false);
+        $response->assertSee('Email is managed exclusively by Super Admin');
         $response->assertDontSee('Change Password');
         $response->assertDontSee('data-tab="admins"', false);
         $response->assertDontSee('Admin Staff Accounts');
@@ -226,9 +260,6 @@ class AdminSettingsAccountTest extends TestCase
             'email' => 'support@supervet.test',
             'phone' => '0999-555-4433',
             'accreditation' => 'BAI-2026-999',
-            'hours_weekday' => '08:00 AM - 07:00 PM',
-            'hours_saturday' => '08:00 AM - 06:00 PM',
-            'hours_sunday' => '09:00 AM - 03:00 PM',
         ]);
 
         $response->assertRedirect();
@@ -240,9 +271,6 @@ class AdminSettingsAccountTest extends TestCase
         $this->assertEquals('support@supervet.test', ClinicSetting::get('clinic_email'));
         $this->assertEquals('0999-555-4433', ClinicSetting::get('clinic_phone'));
         $this->assertEquals('BAI-2026-999', ClinicSetting::get('clinic_accreditation'));
-        $this->assertEquals('08:00 AM - 07:00 PM', ClinicSetting::get('clinic_hours_weekday'));
-        $this->assertEquals('08:00 AM - 06:00 PM', ClinicSetting::get('clinic_hours_saturday'));
-        $this->assertEquals('09:00 AM - 03:00 PM', ClinicSetting::get('clinic_hours_sunday'));
 
         // Verify admin user phone numbers are NOT touched by clinic profile updates
         $mabiniAdmin->refresh();
@@ -364,20 +392,71 @@ class AdminSettingsAccountTest extends TestCase
         $response->assertSessionHasErrors(['time_format', 'session_timeout']);
     }
 
-    public function test_super_admin_sees_operating_hours_inputs_and_non_deceptive_provisioning_notices(): void
+    public function test_super_admin_sees_read_only_branch_schedules_and_non_deceptive_provisioning_notices(): void
     {
         $superAdmin = $this->createSuperAdmin();
 
         $response = $this->actingAs($superAdmin)->get('/admin/settings');
         $response->assertStatus(200);
 
-        $response->assertSee('name="hours_weekday"', false);
-        $response->assertSee('name="hours_saturday"', false);
-        $response->assertSee('name="hours_sunday"', false);
+        $response->assertDontSee('Clinic-Wide Operating Schedule');
+        $response->assertDontSee('name="hours_weekday"', false);
+        $response->assertDontSee('name="hours_saturday"', false);
+        $response->assertDontSee('name="hours_sunday"', false);
+
+        $response->assertSee('Branch Operating Schedules');
+        $response->assertSee('Mabini Branch Schedule');
+        $response->assertSee('Batangas City Branch Schedule');
+        $response->assertSee('Managed exclusively by Mabini Branch Admin');
+        $response->assertSee('Managed exclusively by Batangas City Branch Admin');
 
         $response->assertSee('Multi-branch self-service provisioning is managed via clinic onboarding.');
         $response->assertDontSee('Branch registered in pilot registry');
         $response->assertDontSee('Admin invitation link ready');
+    }
+
+    public function test_super_admin_cannot_update_operating_hours_and_branch_admin_updates_own_branch_hours(): void
+    {
+        $superAdmin = $this->createSuperAdmin();
+        $mabiniAdmin = $this->createAdmin(['branch' => 'Mabini Branch']);
+
+        $this->actingAs($superAdmin)->post('/admin/settings/clinic', [
+            'clinic_name' => 'BK Petaholic Animal Clinic',
+            'email' => 'info@bkpetaholic.com',
+            'hours_weekday' => '08:00 AM - 08:00 PM',
+        ])->assertStatus(403);
+
+        $this->actingAs($superAdmin)->post('/admin/settings/clinic', [
+            'clinic_name' => 'BK Petaholic Animal Clinic',
+            'email' => 'info@bkpetaholic.com',
+            'hours_saturday' => '08:00 AM - 05:00 PM',
+            'hours_sunday' => 'Closed',
+        ])->assertStatus(403);
+
+        $this->assertNull(ClinicSetting::get('clinic_hours_weekday'));
+        $this->assertNull(ClinicSetting::get('branch_mabini_hours_weekday'));
+        $this->assertNull(ClinicSetting::get('branch_batangas_hours_weekday'));
+
+        $mabiniView = $this->actingAs($mabiniAdmin)->get('/admin/settings');
+        $mabiniView->assertStatus(200);
+        $mabiniView->assertSee('Mabini Branch Operating Schedule');
+        $mabiniView->assertSee('name="hours_weekday"', false);
+        $mabiniView->assertSee('name="hours_saturday"', false);
+        $mabiniView->assertSee('name="hours_sunday"', false);
+
+        $this->actingAs($mabiniAdmin)->post('/admin/settings/clinic', [
+            'clinic_name' => 'BK Petaholic Animal Clinic',
+            'email' => 'info@bkpetaholic.com',
+            'hours_weekday' => '08:30 AM - 06:30 PM',
+            'hours_saturday' => '09:00 AM - 04:00 PM',
+            'hours_sunday' => 'Closed',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame('08:30 AM - 06:30 PM', ClinicSetting::get('branch_mabini_hours_weekday'));
+        $this->assertSame('09:00 AM - 04:00 PM', ClinicSetting::get('branch_mabini_hours_saturday'));
+        $this->assertSame('Closed', ClinicSetting::get('branch_mabini_hours_sunday'));
+        $this->assertNull(ClinicSetting::get('branch_batangas_hours_weekday'));
+        $this->assertNull(ClinicSetting::get('clinic_hours_weekday'));
     }
 
     public function test_chatbot_system_prompt_incorporates_saved_persona_and_live_clinic_hours(): void

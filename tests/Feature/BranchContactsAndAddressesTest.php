@@ -25,7 +25,7 @@ class BranchContactsAndAddressesTest extends TestCase
         ]);
     }
 
-    public function test_super_admin_sees_all_branch_hotlines_addresses_and_edit_modals(): void
+    public function test_super_admin_sees_only_branch_addresses_editable_and_hotlines_read_only(): void
     {
         $super = $this->createAdmin(null);
 
@@ -33,23 +33,25 @@ class BranchContactsAndAddressesTest extends TestCase
         $response->assertStatus(200);
         $html = $response->getContent();
 
-        // Tab 1 editable inputs for Super Admin (including visible phone input)
-        $this->assertMatchesRegularExpression('/<input[^>]*type="text"[^>]*name="phone"/', $html);
-        $response->assertSee('General Clinic Hotline');
-        $response->assertSee('Mabini Branch Support Hotline');
-        $response->assertSee('Batangas City Branch Support Hotline');
-        $response->assertSee('name="branch_mabini_phone"', false);
-        $response->assertSee('name="branch_batangas_phone"', false);
+        // Tab 1: hidden phone, NO branch hotline inputs, editable addresses + lock badges for branch hotlines
+        $this->assertMatchesRegularExpression('/<input[^>]*type="hidden"[^>]*name="phone"/', $html);
+        $response->assertDontSee('General Clinic Hotline');
+        $response->assertDontSee('name="branch_mabini_phone"', false);
+        $response->assertDontSee('name="branch_batangas_phone"', false);
         $response->assertSee('name="branch_mabini_address"', false);
         $response->assertSee('name="branch_batangas_address"', false);
+        $response->assertSee('Managed exclusively by Mabini Branch Admin');
+        $response->assertSee('Managed exclusively by Batangas City Branch Admin');
 
-        // Tab 2 Edit buttons, Add New Branch, and modals for both branches with editable address input
+        // Tab 2: Both edit modals exist with editable address and read-only phone (no name="phone" inside branch modals)
         $response->assertSee('Add New Branch');
         $response->assertSee('data-bs-target="#editBranchModal-mabini"', false);
         $response->assertSee('data-bs-target="#editBranchModal-batangas"', false);
         $response->assertSee('id="editBranchModal-mabini"', false);
         $response->assertSee('id="editBranchModal-batangas"', false);
         $response->assertSee('name="address"', false);
+        $response->assertSee('Contact number can only be updated by the assigned Branch Admin.');
+        $this->assertSame(0, preg_match('/id="editBranchModal-[^"]+"[\s\S]*?name="phone"/', $html));
 
         // Tab 5 & 6 Super Admin exclusive sections & clarified helper text
         $response->assertSee('data-tab="admins"', false);
@@ -72,20 +74,23 @@ class BranchContactsAndAddressesTest extends TestCase
         $this->assertMatchesRegularExpression('/<input[^>]*type="hidden"[^>]*name="phone"/', $mabiniHtml);
         $resMabini->assertSee('Branch address is managed exclusively by Super Admin');
 
-        // Tab 2: Edit only on Mabini branch, no address input inside modal, no Super Admin branch actions
+        // Tab 2: Edit only on Mabini branch, editable name="phone", no address input inside modal
         $resMabini->assertSee('data-bs-target="#editBranchModal-mabini"', false);
         $resMabini->assertDontSee('data-bs-target="#editBranchModal-batangas"', false);
         $resMabini->assertSee('id="editBranchModal-mabini"', false);
         $resMabini->assertDontSee('id="editBranchModal-batangas"', false);
         $resMabini->assertDontSee('name="address"', false);
         $resMabini->assertSee('Address can only be modified by Super Admin');
+        $this->assertMatchesRegularExpression('/id="editBranchModal-mabini"[\s\S]*?name="phone"/', $mabiniHtml);
         $resMabini->assertDontSee('Add New Branch');
         $resMabini->assertDontSee('Deactivate');
 
-        // Tab 5 Admin Users & Change Password hidden for Branch Admin, email remains editable
+        // Tab 5 Admin Users & Change Password hidden for Branch Admin; email locked in Preferences & Account
         $resMabini->assertDontSee('data-tab="admins"', false);
         $resMabini->assertDontSee('Change Password');
-        $resMabini->assertSee('name="email"', false);
+        $resMabini->assertSee('Email is managed exclusively by Super Admin');
+        $this->assertSame(1, preg_match('/id="tab-preferences"[\s\S]*$/', $mabiniHtml, $prefsMatch));
+        $this->assertStringNotContainsString('name="email"', $prefsMatch[0]);
 
         // Batangas City Branch Admin symmetry
         $batangasAdmin = $this->createAdmin('Batangas City Branch');
@@ -98,24 +103,29 @@ class BranchContactsAndAddressesTest extends TestCase
         $resBatangas->assertDontSee('name="address"', false);
     }
 
-    public function test_branch_admin_permissions_are_enforced_on_clinic_and_branch_endpoints(): void
+    public function test_super_admin_cannot_modify_branch_hotlines_and_branch_admins_cannot_modify_addresses(): void
     {
+        $super = $this->createAdmin(null);
         $mabiniAdmin = $this->createAdmin('Mabini Branch');
 
-        // Branch admin CAN update own hotline via /admin/settings/clinic
-        $this->actingAs($mabiniAdmin)->post('/admin/settings/clinic', [
+        // Super Admin CANNOT submit branch_mabini_phone or branch_batangas_phone via /admin/settings/clinic
+        $this->actingAs($super)->post('/admin/settings/clinic', [
             'clinic_name' => 'BK Petaholic',
             'email' => 'info@bk.test',
-            'phone' => '+63 917 123 4567',
-            'branch_mabini_phone' => '0917-888-1111',
-        ])->assertRedirect()->assertSessionHasNoErrors();
-        $this->assertSame('0917-888-1111', ClinicSetting::get('branch_mabini_phone'));
+            'branch_mabini_phone' => '0917-000-0001',
+        ])->assertStatus(403);
 
-        // Branch admin CAN update own hotline via /admin/settings/branches/mabini
-        $this->actingAs($mabiniAdmin)->post('/admin/settings/branches/mabini', [
-            'phone' => '0917-999-2222',
-        ])->assertRedirect(route('admin.settings.index') . '#branches')->assertSessionHasNoErrors();
-        $this->assertSame('0917-999-2222', ClinicSetting::get('branch_mabini_phone'));
+        $this->actingAs($super)->post('/admin/settings/clinic', [
+            'clinic_name' => 'BK Petaholic',
+            'email' => 'info@bk.test',
+            'branch_batangas_phone' => '0918-000-0002',
+        ])->assertStatus(403);
+
+        // Super Admin CANNOT submit phone to /admin/settings/branches/{branch}
+        $this->actingAs($super)->post('/admin/settings/branches/mabini', [
+            'phone' => '0917-000-0001',
+            'address' => '100 New Mabini Ave.',
+        ])->assertStatus(403);
 
         // Branch admin CANNOT submit other branch phone or any address via /admin/settings/clinic
         $this->actingAs($mabiniAdmin)->post('/admin/settings/clinic', [
@@ -142,29 +152,42 @@ class BranchContactsAndAddressesTest extends TestCase
         ])->assertStatus(403);
 
         $this->assertNull(ClinicSetting::get('branch_mabini_address'));
+        $this->assertNull(ClinicSetting::get('branch_mabini_phone'));
         $this->assertNull(ClinicSetting::get('branch_batangas_phone'));
     }
 
-    public function test_super_admin_updates_synchronize_across_settings_api_reports_and_chatbot(): void
+    public function test_exclusive_updates_synchronize_across_settings_api_reports_and_chatbot(): void
     {
         $super = $this->createAdmin(null);
+        $mabiniAdmin = $this->createAdmin('Mabini Branch');
+        $batangasAdmin = $this->createAdmin('Batangas City Branch');
 
-        // 1. Update via Clinic Information tab
+        // 1. Super Admin updates both branch addresses via Clinic Information (no branch phones)
         $this->actingAs($super)->post('/admin/settings/clinic', [
             'clinic_name' => 'BK Petaholic',
             'email' => 'info@bk.test',
             'phone' => '0917-555-0000',
-            'branch_mabini_phone' => '0917-222-3333',
-            'branch_batangas_phone' => '0918-444-5555',
             'branch_mabini_address' => '100 New Mabini Ave., Poblacion, Mabini, Batangas',
             'branch_batangas_address' => 'Suite 202 Almario Tower, Kumintang Ilaya, Batangas City',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
-        // 2. Also test updating individual branch via modal endpoint
+        // 2. Super Admin updates Batangas branch address via Branch modal (without sending phone)
         $this->actingAs($super)->post('/admin/settings/branches/batangas', [
-            'phone' => '0918-777-8888',
             'address' => '2nd Floor Almario Hub, Kumintang Ilaya, Batangas City',
-        ])->assertRedirect(route('admin.settings.index') . '#branches')->assertSessionHasNoErrors();
+        ])->assertRedirect(route('admin.settings.index') . '#branches')
+            ->assertSessionHas('success', 'Branch address updated successfully.');
+
+        // 3. Branch Admins update ONLY their own branch hotlines
+        $this->actingAs($mabiniAdmin)->post('/admin/settings/clinic', [
+            'clinic_name' => 'BK Petaholic',
+            'email' => 'info@bk.test',
+            'branch_mabini_phone' => '0917-222-3333',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->actingAs($batangasAdmin)->post('/admin/settings/branches/batangas', [
+            'phone' => '0918-777-8888',
+        ])->assertRedirect(route('admin.settings.index') . '#branches')
+            ->assertSessionHas('success', 'Branch contact number updated successfully.');
 
         // Sync check: Mobile /api/branches
         $api = $this->getJson('/api/branches');
@@ -183,10 +206,12 @@ class BranchContactsAndAddressesTest extends TestCase
         $this->assertSame('0918-777-8888', $batangasReport['phone']);
         $this->assertSame('2nd Floor Almario Hub, Kumintang Ilaya, Batangas City', $batangasReport['address']);
 
-        // Sync check: Settings view reflects updated addresses
+        // Sync check: Settings view reflects updated addresses & hotlines
         $this->actingAs($super)->get('/admin/settings')
             ->assertSee('100 New Mabini Ave., Poblacion, Mabini, Batangas')
-            ->assertSee('2nd Floor Almario Hub, Kumintang Ilaya, Batangas City');
+            ->assertSee('2nd Floor Almario Hub, Kumintang Ilaya, Batangas City')
+            ->assertSee('0917-222-3333')
+            ->assertSee('0918-777-8888');
 
         // Sync check: ChatbotService system prompt contains live phones & addresses + distinct General Admin Desk + accuracy rules
         $prompt = ChatbotService::buildSystemPrompt();

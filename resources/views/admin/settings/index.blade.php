@@ -376,21 +376,7 @@
                 @endphp
 
                 @if($isSuperAdmin)
-                    <div class="col-md-6">
-                        <label class="f-label">General Clinic Hotline</label>
-                        <input type="text" name="phone" class="f-input" value="{{ $clinic['phone'] }}" maxlength="50">
-                        <div class="f-help">Clinic-wide general support line shown on printed multi-branch reports.</div>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="f-label">Mabini Branch Support Hotline</label>
-                        <input type="text" name="branch_mabini_phone" class="f-input" value="{{ $mabiniPhoneVal }}" required maxlength="30">
-                        <div class="f-help">Direct mobile dialer hotline for Mabini Branch.</div>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="f-label">Batangas City Branch Support Hotline</label>
-                        <input type="text" name="branch_batangas_phone" class="f-input" value="{{ $batangasPhoneVal }}" required maxlength="30">
-                        <div class="f-help">Direct mobile dialer hotline for Batangas City Branch.</div>
-                    </div>
+                    <input type="hidden" name="phone" value="{{ $clinic['phone'] }}">
                     <div class="col-md-6">
                         <label class="f-label">Mabini Branch Address</label>
                         <input type="text" name="branch_mabini_address" class="f-input" value="{{ $mabiniAddressVal }}" maxlength="255">
@@ -398,6 +384,20 @@
                     <div class="col-md-6">
                         <label class="f-label">Batangas City Branch Address</label>
                         <input type="text" name="branch_batangas_address" class="f-input" value="{{ $batangasAddressVal }}" maxlength="255">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="f-label">Mabini Branch Support Hotline</label>
+                        <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px;">
+                            <span class="text-truncate">{{ $mabiniPhoneVal }}</span>
+                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Managed exclusively by Mabini Branch Admin</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="f-label">Batangas City Branch Support Hotline</label>
+                        <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px;">
+                            <span class="text-truncate">{{ $batangasPhoneVal }}</span>
+                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Managed exclusively by Batangas City Branch Admin</span>
+                        </div>
                     </div>
                 @else
                     <div class="col-md-6">
@@ -458,26 +458,41 @@
 
             <hr class="my-4" style="border-color: #EAE6DE;">
 
-            <h4 class="section-title mb-3" style="font-size: 16px;">
-                <i class="fas fa-clock text-success"></i>
-                {{ auth()->user()->branch ? auth()->user()->branch . ' Operating Schedule' : 'Clinic-Wide Operating Schedule' }}
-            </h4>
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="f-label">Monday – Friday</label>
-                    <input type="text" name="hours_weekday" class="f-input" value="{{ $clinic['hours_weekday'] }}">
+            @if($isSuperAdmin)
+                <h4 class="section-title mb-3" style="font-size: 16px;">
+                    <i class="fas fa-clock text-success"></i> Branch Operating Schedules
+                </h4>
+                <div class="row g-3">
+                    @foreach($branches as $b)
+                        <div class="col-md-6">
+                            <label class="f-label">{{ $b['name'] }} Schedule</label>
+                            <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px; height: auto; min-height: 44px;">
+                                <span class="small">{{ $b['hours'] }}</span>
+                                <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Managed exclusively by {{ $b['name'] }} Admin</span>
+                            </div>
+                        </div>
+                    @endforeach
                 </div>
-                <div class="col-md-4">
-                    <label class="f-label">Saturday</label>
-                    <input type="text" name="hours_saturday" class="f-input" value="{{ $clinic['hours_saturday'] }}">
+                <div class="f-help mt-2">Branch operating schedules and availability are managed independently by each branch administrator.</div>
+            @else
+                <h4 class="section-title mb-3" style="font-size: 16px;">
+                    <i class="fas fa-clock text-success"></i>
+                    {{ auth()->user()->branch . ' Operating Schedule' }}
+                </h4>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="f-label">Monday – Friday</label>
+                        <input type="text" name="hours_weekday" class="f-input" value="{{ $clinic['hours_weekday'] }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="f-label">Saturday</label>
+                        <input type="text" name="hours_saturday" class="f-input" value="{{ $clinic['hours_saturday'] }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="f-label">Sunday</label>
+                        <input type="text" name="hours_sunday" class="f-input" value="{{ $clinic['hours_sunday'] }}">
+                    </div>
                 </div>
-                <div class="col-md-4">
-                    <label class="f-label">Sunday</label>
-                    <input type="text" name="hours_sunday" class="f-input" value="{{ $clinic['hours_sunday'] }}">
-                </div>
-            </div>
-            @if(auth()->user()->branch === null)
-                <div class="f-help mt-2">Changes here update default operating hours across both branches unless overridden by a branch administrator.</div>
             @endif
 
             <div class="text-end mt-4">
@@ -757,10 +772,17 @@
                 </div>
                 <div class="col-md-6">
                     <label class="f-label">Email Address</label>
-                    <input type="email" name="email" class="f-input @error('email') is-invalid @enderror" value="{{ old('email', auth()->user()->email) }}" required>
-                    @error('email')
-                        <div class="text-danger small mt-1">{{ $message }}</div>
-                    @enderror
+                    @if(auth()->user()->branch === null)
+                        <input type="email" name="email" class="f-input @error('email') is-invalid @enderror" value="{{ old('email', auth()->user()->email) }}" required>
+                        @error('email')
+                            <div class="text-danger small mt-1">{{ $message }}</div>
+                        @enderror
+                    @else
+                        <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px;">
+                            <span class="text-truncate">{{ auth()->user()->email }}</span>
+                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Email is managed exclusively by Super Admin</span>
+                        </div>
+                    @endif
                 </div>
 
                 <div class="col-md-6">
@@ -991,19 +1013,27 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="f-label">Branch Contact Number (Hotline)</label>
-                                <input type="text" name="phone" class="f-input" value="{{ $branch['phone'] }}" required maxlength="30">
-                            </div>
-                            <div>
-                                <label class="f-label">Branch Address</label>
-                                @if(auth()->user()->branch === null)
-                                    <input type="text" name="address" class="f-input" value="{{ $branch['address'] }}" maxlength="255">
-                                @else
+                            @if(auth()->user()->branch === null)
+                                <div class="mb-3">
+                                    <label class="f-label">Branch Address</label>
+                                    <input type="text" name="address" class="f-input" value="{{ $branch['address'] }}" required maxlength="255">
+                                </div>
+                                <div>
+                                    <label class="f-label">Branch Contact Number (Hotline)</label>
+                                    <div class="f-input bg-light text-muted">{{ $branch['phone'] }}</div>
+                                    <div class="f-help mt-1"><i class="fas fa-lock me-1"></i> Contact number can only be updated by the assigned Branch Admin.</div>
+                                </div>
+                            @else
+                                <div class="mb-3">
+                                    <label class="f-label">Branch Contact Number (Hotline)</label>
+                                    <input type="text" name="phone" class="f-input" value="{{ $branch['phone'] }}" required maxlength="30">
+                                </div>
+                                <div>
+                                    <label class="f-label">Branch Address</label>
                                     <div class="f-input bg-light text-muted">{{ $branch['address'] }}</div>
                                     <div class="f-help mt-1"><i class="fas fa-lock me-1"></i> Address can only be modified by Super Admin.</div>
-                                @endif
-                            </div>
+                                </div>
+                            @endif
                         </div>
                         <div class="modal-footer border-0">
                             <button type="button" class="btn-soft" data-bs-dismiss="modal">Cancel</button>

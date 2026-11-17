@@ -255,7 +255,7 @@ class TimeStandardizationAndRescheduleHistoryTest extends TestCase
         });
     }
 
-    public function test_api_store_uses_twelve_hour_time_in_sms_and_notifications(): void
+    public function test_api_store_uses_twelve_hour_time_in_notifications_without_sending_sms(): void
     {
         $admin = $this->createAdmin('Mabini Branch');
         [$owner, $pet] = $this->createOwnerAndPet('9171234567');
@@ -276,11 +276,8 @@ class TimeStandardizationAndRescheduleHistoryTest extends TestCase
         $response->assertStatus(201);
         $appointmentId = $response->json('appointment.id');
 
-        $sms = SmsLog::where('appointment_id', $appointmentId)->first();
-        $this->assertNotNull($sms);
-        $this->assertSame('639171234567', $sms->recipient_phone);
-        $this->assertStringContainsString("on {$formattedDate} at 2:30 PM", $sms->message);
-        $this->assertStringNotContainsString('14:30', $sms->message);
+        $this->assertSame(0, SmsLog::where('appointment_id', $appointmentId)->count());
+        Http::assertNothingSent();
 
         $ownerNotification = AppNotification::where('user_id', $owner->id)
             ->where('type', 'appointment_booked')

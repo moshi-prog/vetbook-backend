@@ -292,14 +292,6 @@ class AppointmentController extends Controller
             \Log::warning('AppNotification admin complete creation failed: ' . $e->getMessage());
         }
 
-        // Send SMS completed notification
-        try {
-            $appointment->load(['user', 'pet']);
-            \App\Services\SMSService::sendAppointmentCompleted($appointment);
-        } catch (\Throwable $e) {
-            \Log::warning('SMS admin complete notification failed: ' . $e->getMessage());
-        }
-
         return back()->with('success', 'Appointment marked as completed.');
     }
 

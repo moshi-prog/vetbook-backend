@@ -77,15 +77,16 @@ class BranchApiTest extends TestCase
 
     public function test_saving_mabini_does_not_change_batangas_and_vice_versa(): void
     {
-        $super = $this->admin(null);
+        $mabiniAdmin = $this->admin('Mabini Branch');
+        $batangasAdmin = $this->admin('Batangas City Branch');
         ClinicSetting::set('clinic_phone', '0919-000-0000');
 
-        $this->actingAs($super)->post('/admin/settings/branches/mabini', ['phone' => '0999-111-2233'])->assertSessionHasNoErrors();
+        $this->actingAs($mabiniAdmin)->post('/admin/settings/branches/mabini', ['phone' => '0999-111-2233'])->assertSessionHasNoErrors();
         $r = $this->getJson('/api/branches');
         $r->assertJsonPath('data.0.phone', '0999-111-2233');
         $r->assertJsonPath('data.1.phone', '0918-765-4321');
 
-        $this->actingAs($super)->post('/admin/settings/branches/batangas', ['phone' => '0922-888-9900']);
+        $this->actingAs($batangasAdmin)->post('/admin/settings/branches/batangas', ['phone' => '0922-888-9900'])->assertSessionHasNoErrors();
         $r = $this->getJson('/api/branches');
         $r->assertJsonPath('data.0.phone', '0999-111-2233');
         $r->assertJsonPath('data.1.phone', '0922-888-9900');

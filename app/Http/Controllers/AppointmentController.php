@@ -162,36 +162,6 @@ class AppointmentController extends Controller
         $formattedDate = \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y');
         $formattedTime = Appointment::format12Hour($appointment->appointment_time);
 
-        // Send SMS acknowledgment to pet owner
-        if ($appointment->user && !empty($appointment->user->phone_number)) {
-            try {
-                $appointment->load(['pet', 'user']);
-                $smsResult = \App\Services\SMSService::send(
-                    $appointment->user->phone_number,
-                    "BK Petaholic: Booking for {$appointment->pet->name} on {$formattedDate} at {$formattedTime} received. "
-                    . "We will text you once confirmed.",
-                    [
-                        'user_id' => $appointment->user_id,
-                        'appointment_id' => $appointment->id,
-                        'type' => 'confirmation',
-                    ]
-                );
-                if (!$smsResult['success']) {
-                    \Log::warning('Booking SMS failed', [
-                        'appointment_id' => $appointment->id,
-                        'error' => $smsResult['error'],
-                    ]);
-                }
-            } catch (\Throwable $e) {
-                \Log::error('Booking SMS exception: ' . $e->getMessage());
-            }
-        } else {
-            \Log::info('Booking SMS skipped — no phone number', [
-                'appointment_id' => $appointment->id,
-                'user_id' => $appointment->user_id ?? null,
-            ]);
-        }
-
         // Create In-App Notification for Pet Owner
         try {
             AppNotification::create([

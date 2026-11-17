@@ -171,7 +171,7 @@ class AdminSmsNotificationTest extends TestCase
         $this->assertEquals("RESCHEDULED: Bantay moves to {$formattedDate} at 3:30 PM. See you at Batangas City Branch!", $log->message);
     }
 
-    public function test_complete_appointment_sends_sms_using_custom_completed_template(): void
+    public function test_complete_appointment_does_not_send_sms(): void
     {
         $admin = $this->createAdmin();
         [$owner, $pet] = $this->createOwnerAndPet();
@@ -198,13 +198,8 @@ class AdminSmsNotificationTest extends TestCase
             'status' => 'completed',
         ]);
 
-        $log = SmsLog::where('appointment_id', $appointment->id)
-            ->where('type', 'completed')
-            ->first();
-
-        $this->assertNotNull($log);
-        $this->assertEquals('639171234567', $log->recipient_phone);
-        $this->assertEquals('COMPLETED: Thank you Maria Clara for bringing Bantay to Mabini Branch!', $log->message);
+        $this->assertSame(0, SmsLog::where('appointment_id', $appointment->id)->count());
+        Http::assertNothingSent();
     }
 
     public function test_cancel_appointment_sends_sms_using_custom_cancellation_template(): void
