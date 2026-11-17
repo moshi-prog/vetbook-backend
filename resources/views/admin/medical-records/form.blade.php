@@ -33,6 +33,23 @@
     .ts-dropdown { border-radius: 16px; overflow: hidden; font-family: 'Nunito Sans', sans-serif; }
     .ts-dropdown .active { background: #C8E8D0; color: #2A6038; }
     .form-actions { display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap; margin-top: 28px; }
+    .med-quick-pick-wrap {
+        background: #FAF6F0; border: 1px solid #EAE6DE; border-radius: 14px;
+        padding: 10px 12px; margin-bottom: 10px;
+    }
+    .med-chip-btn {
+        display: inline-flex; align-items: center; gap: 4px;
+        background: #E1F3E6; color: #2A6038; border: 1px solid #B7DEC2;
+        border-radius: 9999px; font-family: 'Nunito Sans', sans-serif;
+        font-size: 12px; font-weight: 700; padding: 4px 11px; cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .med-chip-btn:hover:not(:disabled) {
+        background: #C8E8D0; border-color: #4A7C59;
+    }
+    .med-chip-btn:disabled {
+        background: #F0ECE4; color: #8C857B; border-color: #DFDAD0; cursor: not-allowed;
+    }
 </style>
 @endsection
 
@@ -131,6 +148,32 @@
                 @if($fieldError('vaccinations')) <div class="f-error">{{ $fieldError('vaccinations') }}</div> @endif
             </div>
             <div class="col-md-6">
+                @if(isset($medicines) && $medicines->isNotEmpty())
+                    <div class="med-quick-pick-wrap">
+                        <div style="font-family: 'Nunito Sans', sans-serif; font-size: 11px; font-weight: 700; color: #2A6038; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px;">
+                            <i class="fas fa-pills me-1"></i> Quick-Pick from Medicine Stock
+                        </div>
+                        <div class="d-flex flex-wrap gap-1" id="medicineQuickPickBar">
+                            @foreach($medicines as $med)
+                                @php
+                                    $stock = (int) ($med->stock ?? 0);
+                                    $unit = $med->unit ?: 'units';
+                                @endphp
+                                <button type="button"
+                                        class="med-chip-btn"
+                                        data-med-id="{{ $med->id }}"
+                                        data-med-name="{{ $med->name }}"
+                                        data-med-category="{{ $med->category ?: 'Medicine' }}"
+                                        data-med-unit="{{ $unit }}"
+                                        data-med-stock="{{ $stock }}"
+                                        {{ $stock <= 0 ? 'disabled' : '' }}>
+                                    + {{ $med->name }} ({{ $stock }} {{ $unit }})
+                                </button>
+                            @endforeach
+                        </div>
+                        <div id="dispensedMedicinesInputs"></div>
+                    </div>
+                @endif
                 <label class="f-label" for="prescriptions">Prescriptions</label>
                 <textarea id="prescriptions" name="prescriptions" rows="4"
                           class="f-input {{ $fieldError('prescriptions') ? 'is-invalid' : '' }}">{{ $val('prescriptions') }}</textarea>
@@ -161,6 +204,50 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         new TomSelect('#pet_id', { create: false, maxOptions: null, allowEmptyOption: true });
+
+        const prescriptionsEl = document.getElementById('prescriptions');
+        const dispensedContainer = document.getElementById('dispensedMedicinesInputs');
+        const quickPickBar = document.getElementById('medicineQuickPickBar');
+        let dispensedIndex = 0;
+
+        if (quickPickBar && prescriptionsEl && dispensedContainer) {
+            quickPickBar.querySelectorAll('.med-chip-btn').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    let remaining = parseInt(this.getAttribute('data-med-stock') || '0', 10);
+                    if (remaining <= 0) return;
+
+                    const medId = this.getAttribute('data-med-id');
+                    const medName = this.getAttribute('data-med-name');
+                    const medCategory = this.getAttribute('data-med-category') || 'Medicine';
+                    const medUnit = this.getAttribute('data-med-unit') || 'units';
+
+                    const line = `• ${medName} (${medCategory})`;
+                    const current = prescriptionsEl.value.trim();
+                    prescriptionsEl.value = current ? `${prescriptionsEl.value.replace(/\s+$/, '')}\n${line}` : line;
+
+                    const idInput = document.createElement('input');
+                    idInput.type = 'hidden';
+                    idInput.name = `dispensed_medicines[${dispensedIndex}][medicine_id]`;
+                    idInput.value = medId;
+
+                    const qtyInput = document.createElement('input');
+                    qtyInput.type = 'hidden';
+                    qtyInput.name = `dispensed_medicines[${dispensedIndex}][quantity]`;
+                    qtyInput.value = '1';
+
+                    dispensedContainer.appendChild(idInput);
+                    dispensedContainer.appendChild(qtyInput);
+                    dispensedIndex++;
+
+                    remaining = Math.max(0, remaining - 1);
+                    this.setAttribute('data-med-stock', String(remaining));
+                    this.textContent = `+ ${medName} (${remaining} ${medUnit})`;
+                    if (remaining <= 0) {
+                        this.disabled = true;
+                    }
+                });
+            });
+        }
     });
 </script>
 @endsection

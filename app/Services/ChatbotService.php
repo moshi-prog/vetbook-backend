@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Models\ClinicSetting;
+use App\Models\Medicine;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class ChatbotService
 {
@@ -83,7 +85,48 @@ class ChatbotService
             . "4. For urgent red-flag symptoms (difficulty breathing, seizures, trauma, severe bleeding, continuous vomiting), immediately urge the owner to call the clinic hotline ({$clinicPhone}) or visit the nearest branch right away.\n"
             . "5. End answers with a warm, encouraging invitation to visit BK Petaholic Animal Clinic or book an appointment in the app.\n";
 
-        // 5. User & Pet Personalization
+        // 5. Live Pet Medicine & Stock Inventory
+        $medicines = collect();
+        try {
+            if (Schema::hasTable('medicines')) {
+                $medicines = Medicine::orderBy('name')
+                    ->get(['name', 'category', 'species', 'unit', 'stock', 'low_stock_threshold', 'branch']);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('ChatbotService: Failed to load medicines inventory: ' . $e->getMessage());
+        }
+
+        if ($medicines->isNotEmpty()) {
+            $medicineLines = $medicines->map(function ($med) {
+                $cat = $med->category ?: 'General';
+                $species = $med->species ?: 'All Pets';
+                $branch = $med->branch ?: 'All Branches';
+                $unit = $med->unit ?: 'units';
+                $stock = (int) $med->stock;
+                $threshold = (int) ($med->low_stock_threshold ?? 5);
+
+                if ($stock <= 0) {
+                    $statusText = "Out of Stock (0 {$unit} remaining)";
+                } elseif ($stock <= $threshold) {
+                    $statusText = "Low Stock — {$stock} {$unit} remaining";
+                } else {
+                    $statusText = "In Stock — {$stock} {$unit} remaining";
+                }
+
+                return "• {$med->name} ({$cat} | For: {$species} | Branch: {$branch}): {$statusText}";
+            })->implode("\n");
+        } else {
+            $medicineLines = '• No medicines are currently listed in the live inventory database.';
+        }
+
+        $prompt .= "\nCLINIC PET MEDICINE INVENTORY & LIVE STOCK AVAILABILITY:\n"
+            . "{$medicineLines}\n\n"
+            . "MEDICINE & STOCK INQUIRY RULES:\n"
+            . "1. When a pet owner asks if a medicine, vaccine, dewormer, or treatment is available or in stock (or asks how many stock are left), check the live CLINIC PET MEDICINE INVENTORY list above and give the exact current status (In Stock with quantity/unit, Low Stock, or Out of Stock) and which branch carries it.\n"
+            . "2. If the requested medicine is NOT listed in the inventory above, clearly tell the owner it is not currently shown in our live inventory and suggest calling the branch hotline (Mabini: {$mabiniPhone}, Batangas City: {$batangasPhone}) to confirm before visiting.\n"
+            . "3. Keep STRICT CLINICAL SAFETY RULE #1: you may report whether a medicine is in stock, its target pet species, and how much stock is available, but NEVER prescribe dosages or instruct owners to medicate their pet without a veterinarian's examination.\n";
+
+        // 6. User & Pet Personalization
         if ($user) {
             $prompt .= "\nPET OWNER CONTEXT:\n"
                 . "• You are chatting with {$user->name}.\n";

@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AdminNotificationController;
 use App\Http\Controllers\Admin\AppointmentController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\MedicalRecordController;
+use App\Http\Controllers\Admin\MedicineController;
 use App\Http\Controllers\Admin\PetOwnerController;
 use App\Http\Controllers\Admin\PetController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -57,6 +58,10 @@ Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {
     Route::get('/medical-records/export', [MedicalRecordController::class, 'export'])->name('medical-records.export');
     Route::match(['post', 'delete'], '/medical-records/bulk-delete', [MedicalRecordController::class, 'bulkDestroy'])->name('medical-records.bulk-delete');
     Route::get('/medical-records/create', [MedicalRecordController::class, 'create'])->name('medical-records.create');
+    Route::post('/medical-records/medicines', [MedicineController::class, 'store'])->name('medicines.store');
+    Route::put('/medical-records/medicines/{id}', [MedicineController::class, 'update'])->name('medicines.update');
+    Route::patch('/medical-records/medicines/{id}/stock', [MedicineController::class, 'updateStock'])->name('medicines.stock');
+    Route::delete('/medical-records/medicines/{id}', [MedicineController::class, 'destroy'])->name('medicines.destroy');
     Route::post('/medical-records', [MedicalRecordController::class, 'store'])->name('medical-records.store');
     Route::get('/medical-records/pet/{petId}', [MedicalRecordController::class, 'petRecords'])->name('medical-records.pet');
     Route::get('/medical-records/{id}', [MedicalRecordController::class, 'show'])->name('medical-records.show');

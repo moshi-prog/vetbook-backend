@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AppNotification;
 use App\Models\MedicalRecord;
+use App\Models\Medicine;
 use App\Models\Pet;
 use App\Services\PushNotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class MedicalRecordController extends Controller
 {
@@ -94,9 +97,10 @@ class MedicalRecordController extends Controller
 
         $filters = ['search' => $search, 'period' => $period];
         $hasFilters = $search !== '' || $period !== 'all';
+        $medicines = $this->availableMedicines();
 
         return view('admin.medical-records.index', compact(
-            'records', 'stats', 'filters', 'hasFilters', 'branch'
+            'records', 'stats', 'filters', 'hasFilters', 'branch', 'medicines'
         ));
     }
 
@@ -139,17 +143,41 @@ class MedicalRecordController extends Controller
             'record' => null,
             'pets' => $this->petOptions(),
             'selectedPetId' => $request->input('pet_id'),
+            'medicines' => $this->availableMedicines(),
         ]);
     }
 
     public function store(Request $request)
     {
         $data = $this->validated($request);
+        $dispensedItems = $this->extractDispensedMedicines($request);
 
         $vet = trim((string) ($data['veterinarian'] ?? ''));
         $data['veterinarian'] = $vet !== '' ? $vet : null;
 
-        $record = MedicalRecord::create($data);
+        $userBranch = auth()->user()?->branch;
+
+        $record = DB::transaction(function () use ($data, $dispensedItems, $userBranch) {
+            $created = MedicalRecord::create($data);
+
+            if (!empty($dispensedItems) && Schema::hasTable('medicines')) {
+                foreach ($dispensedItems as $medicineId => $qty) {
+                    $med = Medicine::where('id', $medicineId)->lockForUpdate()->first();
+                    if (!$med) {
+                        continue;
+                    }
+                    if ($userBranch && $med->branch && $med->branch !== $userBranch) {
+                        abort(403, 'Unauthorized branch access.');
+                    }
+                    $deduct = min((int) $qty, max(0, (int) $med->stock));
+                    if ($deduct > 0) {
+                        $med->decrement('stock', $deduct);
+                    }
+                }
+            }
+
+            return $created;
+        });
 
         // Notify pet owner (In-app + Lockscreen push)
         try {
@@ -198,6 +226,7 @@ class MedicalRecordController extends Controller
             'record' => $record,
             'pets' => $this->petOptions(),
             'selectedPetId' => $record->pet_id,
+            'medicines' => $this->availableMedicines(),
         ]);
     }
 
@@ -350,6 +379,47 @@ class MedicalRecordController extends Controller
             'notes' => 'nullable|string|max:5000',
             'next_visit_date' => 'nullable|date|after_or_equal:consultation_date',
         ]);
+    }
+
+    private function availableMedicines()
+    {
+        if (!Schema::hasTable('medicines')) {
+            return collect();
+        }
+
+        $branch = auth()->user()?->branch;
+
+        return Medicine::query()
+            ->when($branch, fn ($q) => $q->forBranch($branch))
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function extractDispensedMedicines(Request $request): array
+    {
+        $request->validate([
+            'dispensed_medicines' => 'nullable|array',
+        ]);
+
+        $raw = $request->input('dispensed_medicines', []);
+        $counts = [];
+
+        foreach ($raw as $entry) {
+            if (is_array($entry)) {
+                $medId = $entry['medicine_id'] ?? null;
+                $qty = isset($entry['quantity']) ? max(1, (int) $entry['quantity']) : 1;
+            } else {
+                $medId = $entry;
+                $qty = 1;
+            }
+
+            if (is_numeric($medId) && (int) $medId > 0) {
+                $id = (int) $medId;
+                $counts[$id] = ($counts[$id] ?? 0) + $qty;
+            }
+        }
+
+        return $counts;
     }
 
     private function petOptions()

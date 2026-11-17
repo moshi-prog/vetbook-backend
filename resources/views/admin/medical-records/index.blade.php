@@ -41,7 +41,12 @@
             @endif
         </div>
     </div>
-    <div class="d-flex align-items-center gap-2">
+    <div class="d-flex align-items-center flex-wrap gap-2">
+        <button type="button" class="btn" data-bs-toggle="modal" data-bs-target="#medicineStockModal"
+                style="background: #E1F3E6; color: #2A6038; font-family: 'Nunito Sans', sans-serif; font-size: 13px; font-weight: 700; padding: 10px 18px; border: 1px solid #B7DEC2; border-radius: 9999px;">
+            <i class="fas fa-pills me-1"></i> Medicine &amp; Stock
+            <span class="badge rounded-pill ms-1" style="background: #2A6038; color: #FFFFFF;">{{ ($medicines ?? collect())->count() }}</span>
+        </button>
         <a href="{{ route('admin.medical-records.export', request()->query()) }}" target="_blank"
            class="btn" style="background: #FAF6F0; color: #4A7C59; font-family: 'Nunito Sans', sans-serif; font-size: 13px; font-weight: 700; padding: 10px 18px; border: 1px solid #EAE6DE; border-radius: 9999px; text-decoration: none;"
            onmouseover="this.style.background='#F0ECE4'" onmouseout="this.style.background='#FAF6F0'">
@@ -134,5 +139,7 @@
         'exportRoute' => route('admin.medical-records.export'),
     ])
 @endif
+
+@include('admin.medical-records._medicine_modal', ['medicines' => $medicines ?? collect(), 'branch' => $branch])
 
 @endsection
