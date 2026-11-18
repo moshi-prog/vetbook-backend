@@ -42,10 +42,17 @@
             </li>
             @if(auth()->check() && auth()->user()->branch !== null)
             <li class="nav-item">
-                <a class="nav-link {{ request()->routeIs('admin.appointments.*') || request()->routeIs('admin.appointments.index') ? 'active' : '' }}" 
-                   href="{{ Route::has('admin.appointments.index') ? route('admin.appointments.index') : url('/admin/appointments') }}">
+                <a class="nav-link {{ (request()->routeIs('admin.appointments.*') && request('tab') !== 'surgery') ? 'active' : '' }}" 
+                   href="{{ Route::has('admin.appointments.index') ? route('admin.appointments.index', ['tab' => 'regular']) : url('/admin/appointments') }}">
                     <i class="fa-solid fa-calendar-check nav-icon"></i>
                     <span class="nav-label">Appointments</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {{ (request()->routeIs('admin.appointments.*') && request('tab') === 'surgery') ? 'active' : '' }}" 
+                   href="{{ Route::has('admin.appointments.index') ? route('admin.appointments.index', ['tab' => 'surgery']) : url('/admin/appointments?tab=surgery') }}">
+                    <i class="fa-solid fa-heart-pulse nav-icon"></i>
+                    <span class="nav-label">Surgery Appointments</span>
                 </a>
             </li>
             <li class="nav-item">

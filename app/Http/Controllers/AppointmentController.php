@@ -56,6 +56,12 @@ class AppointmentController extends Controller
     {
         $user = JWTAuth::parseToken()->authenticate();
 
+        try {
+            \App\Services\AppointmentReminderService::dispatchDueReminders($user->id);
+        } catch (\Throwable $e) {
+            \Log::warning('Due appointment reminder/auto-cancel check failed: ' . $e->getMessage());
+        }
+
         $appointments = Appointment::with('pet')
             ->where('user_id', $user->id)
             ->orderBy('appointment_date', 'desc')
@@ -339,15 +345,17 @@ class AppointmentController extends Controller
         $isSurgery = $serviceType === 'surgery';
 
         $validator = Validator::make($request->all(), [
-            'pet_id'           => 'nullable|integer|exists:pets,id|required_without:pet_ids',
-            'pet_ids'          => 'nullable|array|min:1|required_without:pet_id',
-            'pet_ids.*'        => 'integer|exists:pets,id',
-            'branch'           => ['required', 'string', Rule::in(self::BRANCHES)],
-            'appointment_date' => 'required|date|after_or_equal:today',
-            'appointment_time' => $isSurgery ? 'nullable|string|max:20' : 'required|string|date_format:H:i',
-            'service_type'     => 'nullable|string|max:100',
-            'reason'           => 'nullable|string|max:255',
-            'notes'            => 'nullable|string|max:500',
+            'pet_id'              => 'nullable|integer|exists:pets,id|required_without:pet_ids',
+            'pet_ids'             => 'nullable|array|min:1|required_without:pet_id',
+            'pet_ids.*'           => 'integer|exists:pets,id',
+            'branch'              => ['required', 'string', Rule::in(self::BRANCHES)],
+            'appointment_date'    => 'required|date|after_or_equal:today',
+            'appointment_time'    => $isSurgery ? 'nullable|string|max:20' : 'required|string|date_format:H:i',
+            'service_type'        => 'nullable|string|max:100',
+            'reason'              => 'nullable|string|max:255',
+            'notes'               => 'nullable|string|max:500',
+            'preferred_time_from' => 'nullable|string|max:30',
+            'preferred_time_to'   => 'nullable|string|max:30',
         ]);
 
         if ($validator->fails()) {
@@ -387,8 +395,15 @@ class AppointmentController extends Controller
                 ? trim((string) $request->appointment_time)
                 : 'ON_CALL';
             $reasonLabel = $request->filled('reason') ? trim((string) $request->reason) : 'Surgery';
+            $prefFrom = trim((string) $request->input('preferred_time_from', ''));
+            $prefTo = trim((string) $request->input('preferred_time_to', ''));
+            $hasWindow = $prefFrom !== '' && $prefTo !== '';
+            $proposedTimeWindow = $hasWindow ? "Preferred Window: {$prefFrom} - {$prefTo}" : null;
+            $baseNotes = trim((string) $request->input('notes', ''));
+            $prefTag = $hasWindow ? "[Preferred Surgery Schedule: {$dateStr} • {$prefFrom} to {$prefTo}]" : '';
+            $combinedNotes = trim($prefTag . ($prefTag && $baseNotes ? "\n" : '') . $baseNotes) ?: null;
 
-            $createdAppointments = DB::transaction(function () use ($pets, $user, $request, $dateStr, $surgeryTime, $reasonLabel, $batchId) {
+            $createdAppointments = DB::transaction(function () use ($pets, $user, $request, $dateStr, $surgeryTime, $reasonLabel, $batchId, $proposedTimeWindow, $combinedNotes) {
                 $rows = [];
                 foreach ($pets as $pet) {
                     $rows[] = Appointment::create([
@@ -399,10 +414,12 @@ class AppointmentController extends Controller
                         'appointment_time' => $surgeryTime,
                         'status'           => Appointment::STATUS_PENDING,
                         'reason'           => $reasonLabel,
-                        'notes'            => $request->notes,
+                        'notes'            => $combinedNotes,
                         'service_type'     => 'surgery',
                         'duration_minutes' => 60,
                         'surgery_status'   => 'awaiting_slot',
+                        'proposed_date'    => $dateStr,
+                        'proposed_time'    => $proposedTimeWindow,
                         'batch_booking_id' => $batchId,
                     ]);
                 }
@@ -411,13 +428,14 @@ class AppointmentController extends Controller
 
             $petNames = collect($pets)->pluck('name')->implode(', ');
             $formattedDate = Carbon::parse($dateStr)->format('M d, Y');
+            $windowText = $hasWindow ? " ({$formattedDate}, {$prefFrom} – {$prefTo})" : " ({$formattedDate})";
 
             try {
                 foreach ($createdAppointments as $created) {
                     AppNotification::create([
                         'user_id' => $user->id,
                         'title'   => 'On-Call Surgery Request Submitted',
-                        'message' => "Your surgery request for {$created->pet->name} starting {$formattedDate} at {$request->branch} has been sent. Clinic staff will propose an available surgical slot shortly.",
+                        'message' => "Your surgery request for {$created->pet->name} starting {$formattedDate}" . ($hasWindow ? " ({$prefFrom} - {$prefTo})" : '') . " at {$request->branch} has been sent. Clinic staff will propose an available surgical slot shortly.",
                         'type'    => 'surgery_requested',
                         'data'    => ['appointment_id' => $created->id, 'pet_id' => $created->pet_id],
                     ]);
@@ -430,7 +448,7 @@ class AppointmentController extends Controller
                     AppNotification::create([
                         'user_id' => $staff->id,
                         'title'   => 'On-Call Surgery Request',
-                        'message' => "{$user->name} requested an on-call Surgery for {$petNames} ({$request->branch}). Please set an available surgery date and time slot.",
+                        'message' => "{$user->name} requested an on-call Surgery for {$petNames}{$windowText} at {$request->branch}. Please set an available surgery date and time slot.",
                         'type'    => 'surgery_requested',
                         'data'    => ['appointment_id' => $createdAppointments[0]->id, 'branch' => $request->branch],
                     ]);
@@ -859,8 +877,11 @@ class AppointmentController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'action'          => ['required', 'string', Rule::in(['accept', 'request_another'])],
-            'preferred_notes' => 'nullable|string|max:500',
+            'action'              => ['required', 'string', Rule::in(['accept', 'request_another'])],
+            'preferred_date'      => 'nullable|date|after:today',
+            'preferred_time_from' => 'nullable|string|max:30',
+            'preferred_time_to'   => 'nullable|string|max:30',
+            'preferred_notes'     => 'nullable|string|max:500',
         ]);
 
         if ($validator->fails()) {
@@ -884,14 +905,40 @@ class AppointmentController extends Controller
             $staffMessage = "{$user->name} confirmed the proposed surgery schedule for {$petName} on {$dateStr} at {$timeStr} ({$appointment->branch}).";
             $notifType = 'surgery_confirmed';
         } else {
-            $extra = trim((string) $request->input('preferred_notes', 'Requested another available date/time.'));
-            $tag = "[Owner Requested Another Surgery Time] {$extra}";
+            $prefDate = $request->filled('preferred_date')
+                ? Carbon::parse($request->preferred_date)->toDateString()
+                : null;
+            $prefFrom = trim((string) $request->input('preferred_time_from', ''));
+            $prefTo = trim((string) $request->input('preferred_time_to', ''));
+            $extra = trim((string) $request->input('preferred_notes', ''));
+
+            if ($prefDate) {
+                $appointment->appointment_date = $prefDate;
+                $appointment->proposed_date = $prefDate;
+            }
+            if ($prefFrom !== '' && $prefTo !== '') {
+                $appointment->proposed_time = "{$prefFrom} - {$prefTo}";
+            }
+
+            $parts = [];
+            if ($prefDate) {
+                $parts[] = 'Preferred Date: ' . Carbon::parse($prefDate)->format('M d, Y');
+            }
+            if ($prefFrom !== '' && $prefTo !== '') {
+                $parts[] = "Window: {$prefFrom} to {$prefTo}";
+            }
+            if ($extra !== '') {
+                $parts[] = $extra;
+            }
+            $summaryText = !empty($parts) ? implode(' • ', $parts) : 'Requested another available date/time.';
+            $tag = "[Owner Requested Another Surgery Time] {$summaryText}";
+
             $appointment->surgery_status = 'reschedule_requested';
             $appointment->notes = $appointment->notes ? ($appointment->notes . "\n\n" . $tag) : $tag;
             $appointment->save();
 
             $staffTitle = 'Owner Requested Another Surgery Time';
-            $staffMessage = "{$user->name} requested another surgery schedule for {$petName} ({$appointment->branch}): {$extra}";
+            $staffMessage = "{$user->name} requested another surgery schedule for {$petName} ({$appointment->branch}): {$summaryText}";
             $notifType = 'surgery_reschedule_requested';
         }
 

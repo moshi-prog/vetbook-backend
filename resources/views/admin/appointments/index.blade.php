@@ -200,10 +200,36 @@
     </div>
 </div>
 
+{{-- Top-Level 2-Tab Switcher: Regular Appointments vs Surgery Appointments --}}
+@php
+    $activeTab = ($tab ?? request('tab')) === 'surgery' ? 'surgery' : 'regular';
+    $regularTabCount = $regularTotalCount ?? 0;
+    $surgeryTabCount = $surgeryTotalCount ?? 0;
+@endphp
+<div class="d-flex flex-wrap gap-2 mb-3">
+    <a href="{{ route('admin.appointments.index', ['tab' => 'regular']) }}"
+       class="filter-tab {{ $activeTab === 'regular' ? 'active' : '' }}"
+       style="padding: 10px 20px; font-weight: 700;">
+        <i class="fas fa-calendar-check me-1"></i>
+        Regular Appointments
+        <span class="count">{{ $regularTabCount }}</span>
+    </a>
+    <a href="{{ route('admin.appointments.index', ['tab' => 'surgery']) }}"
+       class="filter-tab {{ $activeTab === 'surgery' ? 'active' : '' }}"
+       style="padding: 10px 20px; font-weight: 700;">
+        <i class="fas fa-heart-pulse me-1"></i>
+        Surgery Appointments
+        <span class="count">{{ $surgeryTabCount }}</span>
+    </a>
+</div>
+
 {{-- Filter Tabs --}}
 <div class="filter-tabs">
     @php
-        $currentParams = array_filter(request()->only(['search', 'branch', 'date', 'date_from', 'date_to', 'sort']), fn($val) => $val !== null && $val !== '');
+        $currentParams = array_merge(
+            ['tab' => $activeTab],
+            array_filter(request()->only(['search', 'branch', 'date', 'date_from', 'date_to', 'sort']), fn($val) => $val !== null && $val !== '')
+        );
     @endphp
     <a href="{{ route('admin.appointments.index', array_merge($currentParams, ['status' => 'all'])) }}"
        class="filter-tab {{ !request('status') || request('status') == 'all' ? 'active' : '' }}">
@@ -229,6 +255,7 @@
 
 {{-- Filters Form (Search, Branch, Date Range, Sort) --}}
 <form method="GET" action="{{ route('admin.appointments.index') }}" class="mb-4">
+    <input type="hidden" name="tab" value="{{ $activeTab }}">
     @if(request()->filled('status'))
         <input type="hidden" name="status" value="{{ request('status') }}">
     @endif
@@ -279,7 +306,7 @@
                 Filter
             </button>
             @if(request('search') || request('branch') || request('date') || (request('sort') && request('sort') !== 'newest_booked'))
-                <a href="{{ route('admin.appointments.index', array_filter(['status' => request('status')])) }}" 
+                <a href="{{ route('admin.appointments.index', array_filter(['tab' => $activeTab, 'status' => request('status')])) }}" 
                    class="filter-tab" style="padding: 10px 14px; border-radius: 16px; justify-content: center;" title="Reset filters">
                     <i class="fas fa-times"></i>
                 </a>
@@ -374,9 +401,31 @@
                                 <div style="font-size: 11px; color: #6B6358;">
                                     {{ $appt->formatted_time }}
                                 </div>
+                                @if($activeTab === 'surgery' && $appt->proposed_time)
+                                    <div style="font-size: 11px; color: #4A7C59; font-weight: 600;">
+                                        {{ $appt->proposed_time }}
+                                    </div>
+                                @endif
                             </td>
                             <td>
                                 <span style="font-size: 12px;">{{ $appt->reason ?? '—' }}</span>
+                                @if($activeTab === 'surgery')
+                                    @php
+                                        $sMap = [
+                                            'awaiting_slot'        => ['Awaiting Staff Slot', '#F8E0A8', '#554020'],
+                                            'slot_proposed'        => ['Slot Proposed', '#D7E3FC', '#1D4ED8'],
+                                            'reschedule_requested' => ['Owner Requested Another Time', '#FFDAD8', '#690005'],
+                                            'confirmed'            => ['Confirmed', '#C8E8D0', '#2A6038'],
+                                        ];
+                                        $sVal = $appt->surgery_status ?: 'awaiting_slot';
+                                        [$sLbl, $sBgCol, $sFgCol] = $sMap[$sVal] ?? ['Awaiting Staff Slot', '#F8E0A8', '#554020'];
+                                    @endphp
+                                    <div class="mt-1">
+                                        <span class="badge rounded-pill" style="background: {{ $sBgCol }}; color: {{ $sFgCol }}; font-size: 10px;">
+                                            {{ $sLbl }}
+                                        </span>
+                                    </div>
+                                @endif
                             </td>
                             <td>
                                 <span class="status-pill {{ $appt->status }}">
@@ -407,6 +456,13 @@
                             </td>
                             <td style="text-align: right;">
                                 <div class="d-inline-flex align-items-center gap-1">
+                                    @if($activeTab === 'surgery' && !in_array($appt->status, ['completed', 'cancelled']))
+                                        <button type="button" class="btn btn-sm rounded-pill px-2 py-1 text-white"
+                                                style="background: #4A7C59; font-size: 11px; font-weight: 700;"
+                                                data-bs-toggle="modal" data-bs-target="#setSurgerySlotModal-{{ $appt->id }}">
+                                            <i class="fas fa-calendar-plus me-1"></i> Set Surgery Slot
+                                        </button>
+                                    @endif
                                     <a href="{{ route('admin.appointments.show', $appt->id) }}"
                                        class="action-btn" title="View details">
                                         <i class="fas fa-eye"></i>
@@ -416,6 +472,54 @@
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
+
+                                @if($activeTab === 'surgery' && !in_array($appt->status, ['completed', 'cancelled']))
+                                    <!-- Propose Surgery Slot Modal -->
+                                    <div class="modal fade text-start" id="setSurgerySlotModal-{{ $appt->id }}" tabindex="-1" aria-hidden="true">
+                                        <div class="modal-dialog modal-dialog-centered">
+                                            <div class="modal-content" style="border-radius: 24px; border: none;">
+                                                <form method="POST" action="{{ route('admin.appointments.propose-surgery-slot', $appt->id) }}">
+                                                    @csrf
+                                                    <div class="modal-header" style="border-bottom: 1px solid #EAE6DE;">
+                                                        <h5 class="modal-title" style="font-family: 'Literata', serif; font-weight: 700;">
+                                                            <i class="fas fa-heart-pulse me-2 text-success"></i> Set Surgery Slot
+                                                        </h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                    </div>
+                                                    <div class="modal-body" style="font-family: 'Nunito Sans', sans-serif;">
+                                                        <p class="small text-muted mb-2">
+                                                            Pet: <strong>{{ $appt->pet?->name ?? 'Pet' }}</strong> &bull; Owner: <strong>{{ $appt->user?->name ?? 'Client' }}</strong>
+                                                        </p>
+                                                        @if($appt->proposed_time)
+                                                            <div class="p-2 rounded mb-3 small" style="background: #F5F1EA; color: #4A7C59; font-weight: 600;">
+                                                                Owner Preference: {{ \Carbon\Carbon::parse($appt->proposed_date ?? $appt->appointment_date)->format('M d, Y') }} &bull; {{ $appt->proposed_time }}
+                                                            </div>
+                                                        @endif
+                                                        <div class="mb-3">
+                                                            <label class="form-label small fw-bold text-muted">Proposed Surgery Date</label>
+                                                            <input type="date" name="proposed_date" class="form-control"
+                                                                   min="{{ \Carbon\Carbon::tomorrow()->toDateString() }}"
+                                                                   value="{{ $appt->proposed_date ? \Carbon\Carbon::parse($appt->proposed_date)->toDateString() : \Carbon\Carbon::parse($appt->appointment_date)->toDateString() }}"
+                                                                   required style="border-radius: 12px;">
+                                                        </div>
+                                                        <div>
+                                                            <label class="form-label small fw-bold text-muted">Proposed Surgery Time</label>
+                                                            <input type="time" name="proposed_time" class="form-control"
+                                                                   value="{{ preg_match('/^\d{2}:\d{2}$/', (string) $appt->proposed_time) ? $appt->proposed_time : '09:00' }}"
+                                                                   required style="border-radius: 12px;">
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer" style="border-top: 1px solid #EAE6DE;">
+                                                        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                                                        <button type="submit" class="btn text-white rounded-pill px-4" style="background: #4A7C59;">
+                                                            <i class="fas fa-paper-plane me-1"></i> Send Slot to Pet Owner
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endif
 
                                 <!-- Delete Confirmation Modal -->
                                 <div class="modal fade text-start" id="deleteApptModal-{{ $appt->id }}" tabindex="-1" aria-hidden="true">

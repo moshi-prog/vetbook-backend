@@ -6,6 +6,7 @@ use App\Models\AppNotification;
 use App\Models\Appointment;
 use App\Models\EmailVerificationCode;
 use App\Models\Pet;
+use App\Models\SmsLog;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -328,7 +329,7 @@ class CapstoneDefenseRevisionsTest extends TestCase
         $token = JWTAuth::fromUser($owner);
         $tomorrow = Carbon::tomorrow()->toDateString();
 
-        // Owner submits on-call surgery without picking regular slot
+        // Owner submits on-call surgery without picking regular slot, specifying FROM/TO preferred window
         $bookRes = $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson('/api/appointments', [
                 'pet_id' => $pets[0]->id,
@@ -336,6 +337,8 @@ class CapstoneDefenseRevisionsTest extends TestCase
                 'appointment_date' => $tomorrow,
                 'service_type' => 'Surgery',
                 'reason' => 'Surgery',
+                'preferred_time_from' => '9:00 AM',
+                'preferred_time_to' => '4:00 PM',
                 'notes' => 'Spay procedure',
             ]);
 
@@ -343,11 +346,36 @@ class CapstoneDefenseRevisionsTest extends TestCase
         $apptId = $bookRes->json('appointment.id');
         $this->assertSame('ON_CALL', $bookRes->json('appointment.appointment_time'));
         $this->assertSame('awaiting_slot', $bookRes->json('appointment.surgery_status'));
+        $this->assertSame('Preferred Window: 9:00 AM - 4:00 PM', $bookRes->json('appointment.proposed_time'));
+        $this->assertStringContainsString('9:00 AM to 4:00 PM', $bookRes->json('appointment.notes'));
 
         $this->assertDatabaseHas('app_notifications', [
             'user_id' => $mabiniStaff->id,
             'type' => 'surgery_requested',
         ]);
+
+        // Also seed a regular Vaccination appointment to verify tab separation on Staff portal
+        Appointment::create([
+            'user_id' => $owner->id,
+            'pet_id' => $pets[0]->id,
+            'branch' => 'Mabini Branch',
+            'appointment_date' => $tomorrow,
+            'appointment_time' => '10:00',
+            'status' => Appointment::STATUS_PENDING,
+            'service_type' => 'vaccination',
+            'reason' => 'Annual Booster Shot',
+        ]);
+
+        $this->actingAs($mabiniStaff)->get('/admin/appointments?tab=regular')
+            ->assertStatus(200)
+            ->assertSee('Annual Booster Shot')
+            ->assertDontSee('Preferred Window: 9:00 AM - 4:00 PM');
+
+        $this->actingAs($mabiniStaff)->get('/admin/appointments?tab=surgery')
+            ->assertStatus(200)
+            ->assertSee('Preferred Window: 9:00 AM - 4:00 PM')
+            ->assertSee('Set Surgery Slot')
+            ->assertDontSee('Annual Booster Shot');
 
         // Staff views appointment and sees coordination card
         $this->actingAs($mabiniStaff)->get("/admin/appointments/{$apptId}")
@@ -370,15 +398,21 @@ class CapstoneDefenseRevisionsTest extends TestCase
             'type' => 'surgery_slot_proposed',
         ]);
 
-        // Owner asks for another time
+        // Owner asks for another time with new preferred date & FROM/TO window
+        $altDate = Carbon::tomorrow()->addDays(3)->toDateString();
         $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson("/api/appointments/{$apptId}/surgery-response", [
                 'action' => 'request_another',
+                'preferred_date' => $altDate,
+                'preferred_time_from' => '1:00 PM',
+                'preferred_time_to' => '5:00 PM',
                 'preferred_notes' => 'Afternoon works better',
             ])->assertStatus(200);
 
         $appt->refresh();
         $this->assertSame('reschedule_requested', $appt->surgery_status);
+        $this->assertSame('1:00 PM - 5:00 PM', $appt->proposed_time);
+        $this->assertSame($altDate, Carbon::parse($appt->appointment_date)->toDateString());
         $this->assertStringContainsString('Afternoon works better', $appt->notes);
 
         // Staff proposes afternoon slot and owner proceeds/confirms
@@ -427,7 +461,7 @@ class CapstoneDefenseRevisionsTest extends TestCase
 
     public function test_24h_and_3h_reminders_and_pet_owner_attendance_confirmation(): void
     {
-        $this->travelTo(Carbon::today()->setHour(10)->setMinute(0)->setSecond(0));
+        $this->travelTo(Carbon::today()->setHour(8)->setMinute(0)->setSecond(0));
 
         $mabiniStaff = $this->createStaff('Mabini Branch');
         [$owner, $pets] = $this->createApprovedOwnerWithPets(2);
@@ -444,7 +478,7 @@ class CapstoneDefenseRevisionsTest extends TestCase
             'reason' => 'Diagnostic / Checkup',
         ]);
 
-        // 3-hour window (today, 2 hours from now) appointment
+        // 2-hour window (today, 2 hours from now) appointment
         $twoHoursLater = now()->addHours(2);
         $sameDayAppt = Appointment::create([
             'user_id' => $owner->id,
@@ -456,23 +490,29 @@ class CapstoneDefenseRevisionsTest extends TestCase
             'reason' => 'Vaccination',
         ]);
 
-        // Fetching notifications triggers both 24h & 3h interactive reminders idempotently
-        $this->withHeader('Authorization', "Bearer {$token}")
-            ->getJson('/api/notifications')
-            ->assertStatus(200);
+        // Running appointments:send-reminders triggers app-only 1-day & 2-hour reminders without sending SMS
+        $this->artisan('appointments:send-reminders')->assertExitCode(0);
+        $this->assertSame(0, SmsLog::count());
 
         $this->assertNotNull($tomorrowAppt->fresh()->reminder_24h_sent_at);
         $this->assertNotNull($sameDayAppt->fresh()->reminder_3h_sent_at);
         $this->assertSame(1, AppNotification::where('user_id', $owner->id)->where('type', 'appointment_reminder_24h')->count());
-        $this->assertSame(1, AppNotification::where('user_id', $owner->id)->where('type', 'appointment_reminder_3h')->count());
 
-        // Calling again does NOT create duplicate reminders
+        $urgentNotif = AppNotification::where('user_id', $owner->id)
+            ->where('type', 'appointment_reminder_3h')
+            ->first();
+        $this->assertNotNull($urgentNotif);
+        $this->assertStringContainsString('automatic appointment cancellation after a 1-hour waiting time', $urgentNotif->message);
+        $this->assertTrue((bool) ($urgentNotif->data['is_urgent_2h'] ?? false));
+        $this->assertSame(60, $urgentNotif->data['waiting_time_minutes'] ?? null);
+
+        // Calling /api/notifications does NOT create duplicate reminders
         $this->withHeader('Authorization', "Bearer {$token}")
             ->getJson('/api/notifications')
             ->assertStatus(200);
         $this->assertSame(1, AppNotification::where('user_id', $owner->id)->where('type', 'appointment_reminder_24h')->count());
 
-        // Pet owner confirms attendance
+        // Pet owner confirms attendance on tomorrow's appointment
         $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson("/api/appointments/{$tomorrowAppt->id}/confirm-attendance")
             ->assertStatus(200);
@@ -487,5 +527,27 @@ class CapstoneDefenseRevisionsTest extends TestCase
         $this->actingAs($mabiniStaff)->get("/admin/appointments/{$tomorrowAppt->id}")
             ->assertStatus(200)
             ->assertSee('Attendance Confirmed');
+
+        // Simulate ignoring the 2-hour reminder past the 1-hour waiting time (+65 mins)
+        $this->travel(65)->minutes();
+        $freshToken = JWTAuth::fromUser($owner);
+
+        $this->withHeader('Authorization', "Bearer {$freshToken}")
+            ->getJson('/api/user/appointments')
+            ->assertStatus(200);
+
+        $sameDayAppt->refresh();
+        $tomorrowAppt->refresh();
+        $this->assertSame(Appointment::STATUS_CANCELLED, $sameDayAppt->status);
+        $this->assertStringContainsString('[Auto-Cancelled]', (string) $sameDayAppt->notes);
+        $this->assertSame(Appointment::STATUS_APPROVED, $tomorrowAppt->status);
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $owner->id,
+            'type' => 'appointment_auto_cancelled',
+        ]);
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $mabiniStaff->id,
+            'type' => 'appointment_auto_cancelled',
+        ]);
     }
 }

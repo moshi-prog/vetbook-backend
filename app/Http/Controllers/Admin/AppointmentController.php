@@ -25,9 +25,25 @@ class AppointmentController extends Controller
         $user = auth()->user();
         $branch = $user->branch;
 
+        $tab = $request->input('tab') === 'surgery' ? 'surgery' : 'regular';
         $sort = $request->input('sort', 'newest_booked');
 
+        $applySurgeryScope = function ($q, bool $onlySurgery) {
+            if ($onlySurgery) {
+                $q->where(function ($sq) {
+                    $sq->where('service_type', 'surgery')
+                       ->orWhereRaw("LOWER(COALESCE(reason, '')) LIKE '%surgery%'");
+                });
+            } else {
+                $q->where(function ($sq) {
+                    $sq->whereNull('service_type')
+                       ->orWhere('service_type', '!=', 'surgery');
+                })->whereRaw("LOWER(COALESCE(reason, '')) NOT LIKE '%surgery%'");
+            }
+        };
+
         $query = Appointment::with(['pet:id,user_id,name,species,breed,age,age_months,gender,weight,health_status', 'user:id,name,email,phone_number,role']);
+        $applySurgeryScope($query, $tab === 'surgery');
 
         if ($sort === 'appointment_date') {
             $query->orderBy('appointment_date', 'desc')->orderBy('appointment_time', 'desc');
@@ -101,8 +117,9 @@ class AppointmentController extends Controller
 
         $appointments = $query->paginate(15)->withQueryString();
 
-        // Stats for the current branch scope (consolidated to 1 single DB query)
+        // Stats for the current branch & tab scope (consolidated to 1 single DB query)
         $statsQuery = Appointment::query();
+        $applySurgeryScope($statsQuery, $tab === 'surgery');
         if ($branch) {
             $statsQuery->where('branch', $branch);
         } elseif ($request->filled('branch') && $request->branch !== 'all') {
@@ -121,7 +138,30 @@ class AppointmentController extends Controller
             'cancelled' => (int) $statusCounts->get('cancelled', 0),
         ];
 
-        return view('admin.appointments.index', compact('appointments', 'stats', 'branch', 'sort'));
+        $branchBase = Appointment::query();
+        if ($branch) {
+            $branchBase->where('branch', $branch);
+        } elseif ($request->filled('branch') && $request->branch !== 'all') {
+            $branchBase->where('branch', $request->branch);
+        }
+
+        $regularTotalQuery = clone $branchBase;
+        $applySurgeryScope($regularTotalQuery, false);
+        $regularTotalCount = (int) $regularTotalQuery->count();
+
+        $surgeryTotalQuery = clone $branchBase;
+        $applySurgeryScope($surgeryTotalQuery, true);
+        $surgeryTotalCount = (int) $surgeryTotalQuery->count();
+
+        return view('admin.appointments.index', compact(
+            'appointments',
+            'stats',
+            'branch',
+            'sort',
+            'tab',
+            'regularTotalCount',
+            'surgeryTotalCount'
+        ));
     }
 
     /**
