@@ -20,6 +20,13 @@ class AdminNotificationController extends Controller
             return response()->json(['alerts' => []], 401);
         }
 
+        if ($user->branch === null) {
+            return response()->json([
+                'status' => 'success',
+                'alerts' => [],
+            ]);
+        }
+
         $alerts = AppNotification::where('user_id', $user->id)
             ->whereNull('read_at')
             ->where('created_at', '>=', now()->subMinutes(15))

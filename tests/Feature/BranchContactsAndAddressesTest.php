@@ -40,8 +40,8 @@ class BranchContactsAndAddressesTest extends TestCase
         $response->assertDontSee('name="branch_batangas_phone"', false);
         $response->assertSee('name="branch_mabini_address"', false);
         $response->assertSee('name="branch_batangas_address"', false);
-        $response->assertSee('Managed exclusively by Mabini Branch Admin');
-        $response->assertSee('Managed exclusively by Batangas City Branch Admin');
+        $response->assertSee('Managed exclusively by Mabini Branch Staff');
+        $response->assertSee('Managed exclusively by Batangas City Branch Staff');
 
         // Tab 2: Both edit modals exist with editable address and read-only phone (no name="phone" inside branch modals)
         $response->assertSee('Add New Branch');
@@ -50,13 +50,13 @@ class BranchContactsAndAddressesTest extends TestCase
         $response->assertSee('id="editBranchModal-mabini"', false);
         $response->assertSee('id="editBranchModal-batangas"', false);
         $response->assertSee('name="address"', false);
-        $response->assertSee('Contact number can only be updated by the assigned Branch Admin.');
+        $response->assertSee('Contact number can only be updated by the assigned Branch Staff.');
         $this->assertSame(0, preg_match('/id="editBranchModal-[^"]+"[\s\S]*?name="phone"/', $html));
 
         // Tab 5 & 6 Super Admin exclusive sections & hidden personal mobile number field
         $response->assertSee('data-tab="admins"', false);
         $response->assertSee('Change Password');
-        $response->assertDontSee('Personal Admin Mobile Number');
+        $response->assertDontSee('Personal Staff Mobile Number');
         $response->assertDontSee('Personal staff contact only.');
     }
 
@@ -73,7 +73,7 @@ class BranchContactsAndAddressesTest extends TestCase
         $resMabini->assertDontSee('name="branch_mabini_address"', false);
         $resMabini->assertDontSee('name="branch_batangas_address"', false);
         $this->assertMatchesRegularExpression('/<input[^>]*type="hidden"[^>]*name="phone"/', $mabiniHtml);
-        $resMabini->assertSee('Branch address is managed exclusively by Super Admin');
+        $resMabini->assertSee('Branch address is managed exclusively by Admin');
 
         // Tab 2: Edit only on Mabini branch, editable name="phone", no address input inside modal
         $resMabini->assertSee('data-bs-target="#editBranchModal-mabini"', false);
@@ -81,7 +81,7 @@ class BranchContactsAndAddressesTest extends TestCase
         $resMabini->assertSee('id="editBranchModal-mabini"', false);
         $resMabini->assertDontSee('id="editBranchModal-batangas"', false);
         $resMabini->assertDontSee('name="address"', false);
-        $resMabini->assertSee('Address can only be modified by Super Admin');
+        $resMabini->assertSee('Address can only be modified by Admin');
         $this->assertMatchesRegularExpression('/id="editBranchModal-mabini"[\s\S]*?name="phone"/', $mabiniHtml);
         $resMabini->assertDontSee('Add New Branch');
         $resMabini->assertDontSee('Deactivate');
@@ -89,8 +89,8 @@ class BranchContactsAndAddressesTest extends TestCase
         // Tab 5 Admin Users & Change Password hidden for Branch Admin; email locked in Preferences & Account; personal mobile visible
         $resMabini->assertDontSee('data-tab="admins"', false);
         $resMabini->assertDontSee('Change Password');
-        $resMabini->assertSee('Email is managed exclusively by Super Admin');
-        $resMabini->assertSee('Personal Admin Mobile Number');
+        $resMabini->assertSee('Email is managed exclusively by Admin');
+        $resMabini->assertSee('Personal Staff Mobile Number');
         $resMabini->assertSee('Personal staff contact only. To update your branch clinic hotline for pet owners and the AI chatbot, use Clinic Information or Branches.');
         $this->assertSame(1, preg_match('/id="tab-preferences"[\s\S]*$/', $mabiniHtml, $prefsMatch));
         $this->assertStringNotContainsString('name="email"', $prefsMatch[0]);

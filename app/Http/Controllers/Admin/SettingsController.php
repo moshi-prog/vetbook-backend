@@ -203,7 +203,7 @@ class SettingsController extends Controller
 
         if ($user->branch !== null) {
             if ($request->filled('email') && strcasecmp(trim((string) $request->input('email')), (string) $user->email) !== 0) {
-                abort(403, 'Unauthorized. Only Super Admins can change login email addresses.');
+                abort(403, 'Unauthorized. Only Admins can change login email addresses.');
             }
 
             $request->validate([
@@ -241,7 +241,7 @@ class SettingsController extends Controller
     public function updateAdmin(Request $request, $id)
     {
         if (auth()->user()->branch !== null) {
-            abort(403, 'Unauthorized. Only Super Admins can update admin accounts.');
+            abort(403, 'Unauthorized. Only Admins can update admin accounts.');
         }
 
         $admin = User::where('role', 'admin')->findOrFail($id);
@@ -276,7 +276,7 @@ class SettingsController extends Controller
     public function changePassword(Request $request)
     {
         if (auth()->user()->branch !== null) {
-            abort(403, 'Unauthorized. Only Super Admins can change admin passwords.');
+            abort(403, 'Unauthorized. Only Admins can change admin passwords.');
         }
 
         $request->validate([
@@ -298,7 +298,7 @@ class SettingsController extends Controller
     public function resetAdminPassword(Request $request, $id)
     {
         if (auth()->user()->branch !== null) {
-            abort(403, 'Unauthorized. Only Super Admins can reset admin passwords.');
+            abort(403, 'Unauthorized. Only Admins can reset admin passwords.');
         }
 
         $request->validate([
@@ -318,10 +318,10 @@ class SettingsController extends Controller
 
         if ($ownKey === null) {
             if ($request->filled('branch_mabini_phone') || $request->filled('branch_batangas_phone')) {
-                abort(403, 'Unauthorized. Branch contact numbers can only be changed by branch admins.');
+                abort(403, 'Unauthorized. Branch contact numbers can only be changed by branch staff.');
             }
             if ($request->filled('hours_weekday') || $request->filled('hours_saturday') || $request->filled('hours_sunday')) {
-                abort(403, 'Unauthorized. Branch operating schedules can only be changed by branch admins.');
+                abort(403, 'Unauthorized. Branch operating schedules can only be changed by branch staff.');
             }
         } else {
             $otherKey = $ownKey === 'mabini' ? 'batangas' : 'mabini';
@@ -440,7 +440,7 @@ class SettingsController extends Controller
 
         if ($own === null) {
             if ($request->has('phone') && trim((string) $request->input('phone')) !== '') {
-                abort(403, 'Unauthorized. Branch contact numbers can only be changed by branch admins.');
+                abort(403, 'Unauthorized. Branch contact numbers can only be changed by branch staff.');
             }
 
             $request->validate([
@@ -457,7 +457,7 @@ class SettingsController extends Controller
         }
 
         if ($request->has('address') && trim((string) $request->input('address')) !== '') {
-            abort(403, 'Unauthorized. Only Super Admins can change branch addresses.');
+            abort(403, 'Unauthorized. Only Admins can change branch addresses.');
         }
 
         $request->validate([

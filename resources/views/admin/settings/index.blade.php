@@ -328,7 +328,7 @@
     </button>
     @if(auth()->user()->branch === null)
     <button type="button" class="settings-tab-btn" data-tab="admins">
-        <i class="fas fa-users-gear"></i> Admin Users
+        <i class="fas fa-users-gear"></i> Staff Accounts
     </button>
     @endif
     <button type="button" class="settings-tab-btn" data-tab="preferences">
@@ -389,14 +389,14 @@
                         <label class="f-label">Mabini Branch Support Hotline</label>
                         <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px;">
                             <span class="text-truncate">{{ $mabiniPhoneVal }}</span>
-                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Managed exclusively by Mabini Branch Admin</span>
+                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Managed exclusively by Mabini Branch Staff</span>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <label class="f-label">Batangas City Branch Support Hotline</label>
                         <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px;">
                             <span class="text-truncate">{{ $batangasPhoneVal }}</span>
-                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Managed exclusively by Batangas City Branch Admin</span>
+                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Managed exclusively by Batangas City Branch Staff</span>
                         </div>
                     </div>
                 @else
@@ -411,7 +411,7 @@
                         <label class="f-label">{{ $ownBranchLabel }} Address</label>
                         <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px;">
                             <span class="text-truncate">{{ $ownBranchKey === 'batangas' ? $batangasAddressVal : $mabiniAddressVal }}</span>
-                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Branch address is managed exclusively by Super Admin</span>
+                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Branch address is managed exclusively by Admin</span>
                         </div>
                     </div>
                     <input type="hidden" name="phone" value="{{ $clinic['phone'] }}">
@@ -446,10 +446,10 @@
                                 <div class="f-help mt-1" id="logoStatusText">PNG, JPG, WEBP up to 2MB. 1:1 circle crop.</div>
                             </div>
                         @else
-                            {{-- Branch Admin: Read-Only UI --}}
+                            {{-- Staff: Read-Only UI --}}
                             <div class="flex-grow-1">
                                 <span class="badge-pill neutral"><i class="fas fa-lock me-1"></i> Read-Only</span>
-                                <div class="f-help mt-1">Official clinic logo &amp; branding are managed exclusively by Super Admin.</div>
+                                <div class="f-help mt-1">Official clinic logo &amp; branding are managed exclusively by Admin.</div>
                             </div>
                         @endif
                     </div>
@@ -468,12 +468,12 @@
                             <label class="f-label">{{ $b['name'] }} Schedule</label>
                             <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px; height: auto; min-height: 44px;">
                                 <span class="small">{{ $b['hours'] }}</span>
-                                <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Managed exclusively by {{ $b['name'] }} Admin</span>
+                                <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Managed exclusively by {{ $b['name'] }} Staff</span>
                             </div>
                         </div>
                     @endforeach
                 </div>
-                <div class="f-help mt-2">Branch operating schedules and availability are managed independently by each branch administrator.</div>
+                <div class="f-help mt-2">Branch operating schedules and availability are managed independently by each branch staff.</div>
             @else
                 <h4 class="section-title mb-3" style="font-size: 16px;">
                     <i class="fas fa-clock text-success"></i>
@@ -700,11 +700,11 @@
     <div class="settings-card">
         <div class="section-head">
             <div>
-                <h3 class="section-title"><i class="fas fa-user-shield text-success"></i> Admin Staff Accounts</h3>
+                <h3 class="section-title"><i class="fas fa-user-shield text-success"></i> Clinic Staff Accounts</h3>
                 <div class="section-desc">Manage authenticated personnel and assign branch authorizations.</div>
             </div>
             <button type="button" class="btn-green-save" data-bs-toggle="modal" data-bs-target="#addAdminModal">
-                <i class="fas fa-user-plus"></i> Add Admin User
+                <i class="fas fa-user-plus"></i> Add Staff Account
             </button>
         </div>
 
@@ -723,10 +723,10 @@
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge-pill {{ $admin->branch ? 'active' : 'neutral' }}">
-                            <i class="fas fa-location-dot"></i> {{ $admin->branch ?? 'All Branches (Super Admin)' }}
+                            <i class="fas fa-location-dot"></i> {{ $admin->branch ?? 'System Admin' }}
                         </span>
                         <span class="badge-pill" style="background: #E8F0FE; color: #1967D2;">
-                            <i class="fas fa-user-shield"></i> {{ ucfirst($admin->role) }}
+                            <i class="fas fa-user-shield"></i> {{ $admin->branch ? 'Staff' : 'Admin' }}
                         </span>
                     </div>
                     <div class="text-muted small">
@@ -757,7 +757,7 @@
         <div class="settings-card">
             <div class="section-head">
                 <div>
-                    <h3 class="section-title"><i class="fas fa-user-circle text-success"></i> My Admin Account</h3>
+                    <h3 class="section-title"><i class="fas fa-user-circle text-success"></i> {{ auth()->user()->branch ? 'My Staff Account' : 'My Admin Account' }}</h3>
                     <div class="section-desc">Manage your profile name, administrative email address, and station assignment.</div>
                 </div>
             </div>
@@ -780,14 +780,14 @@
                     @else
                         <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px;">
                             <span class="text-truncate">{{ auth()->user()->email }}</span>
-                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Email is managed exclusively by Super Admin</span>
+                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Email is managed exclusively by Admin</span>
                         </div>
                     @endif
                 </div>
 
                 @if(auth()->user()->branch !== null)
                     <div class="col-md-6">
-                        <label class="f-label">Personal Admin Mobile Number</label>
+                        <label class="f-label">Personal Staff Mobile Number</label>
                         <input type="text" name="phone_number" class="f-input @error('phone_number') is-invalid @enderror" value="{{ old('phone_number', auth()->user()->phone_number) }}" placeholder="e.g. 09171234567">
                         <div class="f-help">Personal staff contact only. To update your branch clinic hotline for pet owners and the AI chatbot, use Clinic Information or Branches.</div>
                         @error('phone_number')
@@ -801,14 +801,14 @@
                     <div class="f-input d-flex align-items-center justify-content-between bg-white">
                         <span><i class="fas fa-location-dot text-success me-2"></i> {{ auth()->user()->branch ?? 'All Branches' }}</span>
                         <span class="badge-pill {{ auth()->user()->branch ? 'active' : 'neutral' }}">
-                            {{ auth()->user()->branch ? 'Branch Admin' : 'Super Admin' }}
+                            {{ auth()->user()->branch ? 'Staff' : 'Admin' }}
                         </span>
                     </div>
                 </div>
                 <div class="col-md-6">
                     <label class="f-label">System Role</label>
                     <div class="f-input d-flex align-items-center justify-content-between bg-white">
-                        <span><i class="fas fa-shield-halved text-success me-2"></i> Administrator</span>
+                        <span><i class="fas fa-shield-halved text-success me-2"></i> {{ auth()->user()->branch ? 'Clinic Staff' : 'System Administrator' }}</span>
                         <span class="badge-pill active"><i class="fas fa-circle-check"></i> Active Staff</span>
                     </div>
                 </div>
@@ -986,7 +986,7 @@
                 <div class="p-3 rounded-4" style="background: #FAF6F0; border: 1px solid rgba(196,200,188,0.4); color: #4A4E4A;">
                     <div class="fw-bold mb-1"><i class="fas fa-user-shield text-success me-1"></i> Staff Account Provisioning</div>
                     <div class="small mb-0">
-                        Multi-branch self-service provisioning is managed via clinic onboarding. Super Admins can edit existing administrator details, station assignments, and passwords from the staff list.
+                        Multi-branch self-service provisioning is managed via clinic onboarding. Admins can edit existing staff details, station assignments, and passwords from the staff list.
                     </div>
                 </div>
             </div>
@@ -1023,7 +1023,7 @@
                                 <div>
                                     <label class="f-label">Branch Contact Number (Hotline)</label>
                                     <div class="f-input bg-light text-muted">{{ $branch['phone'] }}</div>
-                                    <div class="f-help mt-1"><i class="fas fa-lock me-1"></i> Contact number can only be updated by the assigned Branch Admin.</div>
+                                    <div class="f-help mt-1"><i class="fas fa-lock me-1"></i> Contact number can only be updated by the assigned Branch Staff.</div>
                                 </div>
                             @else
                                 <div class="mb-3">
@@ -1033,7 +1033,7 @@
                                 <div>
                                     <label class="f-label">Branch Address</label>
                                     <div class="f-input bg-light text-muted">{{ $branch['address'] }}</div>
-                                    <div class="f-help mt-1"><i class="fas fa-lock me-1"></i> Address can only be modified by Super Admin.</div>
+                                    <div class="f-help mt-1"><i class="fas fa-lock me-1"></i> Address can only be modified by Admin.</div>
                                 </div>
                             @endif
                         </div>
@@ -1079,7 +1079,7 @@
                             <div class="mb-3">
                                 <label class="f-label">Branch Station Assignment</label>
                                 <select name="branch" class="f-select">
-                                    <option value="" {{ !$admin->branch ? 'selected' : '' }}>All Branches (Super Admin)</option>
+                                    <option value="" {{ !$admin->branch ? 'selected' : '' }}>System Admin (Account Management)</option>
                                     <option value="Mabini Branch" {{ $admin->branch === 'Mabini Branch' ? 'selected' : '' }}>Mabini Branch</option>
                                     <option value="Batangas City Branch" {{ $admin->branch === 'Batangas City Branch' ? 'selected' : '' }}>Batangas City Branch</option>
                                 </select>

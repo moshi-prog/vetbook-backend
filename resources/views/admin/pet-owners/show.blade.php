@@ -179,7 +179,7 @@
         <div class="section-card">
             <h3>
                 <span><i class="fas fa-paw me-2" style="color: #4A7C59;"></i>Pets</span>
-                @if($pets->count() > 4)
+                @if(auth()->user()->branch !== null && $pets->count() > 4)
                     <a href="{{ route('admin.pets.index', ['search' => $owner->name]) }}">View all {{ $pets->count() }} pets <i class="fas fa-arrow-right ms-1"></i></a>
                 @endif
             </h3>
@@ -188,18 +188,33 @@
             @else
                 <div class="pet-grid">
                     @foreach($petsPreview as $pet)
-                        <a href="{{ route('admin.pets.show', $pet->id) }}" class="pet-tile">
-                            @include('admin.medical-records._avatar', ['pet' => $pet, 'size' => 48])
-                            <div>
-                                <div class="nm">{{ $pet->name }}</div>
-                                <div class="sub">
-                                    {{ $pet->species ?: 'Pet' }}{{ $pet->breed ? ' · ' . $pet->breed : '' }}
+                        @if(auth()->user()->branch !== null)
+                            <a href="{{ route('admin.pets.show', $pet->id) }}" class="pet-tile">
+                                @include('admin.medical-records._avatar', ['pet' => $pet, 'size' => 48])
+                                <div>
+                                    <div class="nm">{{ $pet->name }}</div>
+                                    <div class="sub">
+                                        {{ $pet->species ?: 'Pet' }}{{ $pet->breed ? ' · ' . $pet->breed : '' }}
+                                    </div>
+                                    <div class="sub">
+                                        {{ $pet->medical_records_count }} {{ \Illuminate\Support\Str::plural('record', $pet->medical_records_count) }}
+                                    </div>
                                 </div>
-                                <div class="sub">
-                                    {{ $pet->medical_records_count }} {{ \Illuminate\Support\Str::plural('record', $pet->medical_records_count) }}
+                            </a>
+                        @else
+                            <div class="pet-tile">
+                                @include('admin.medical-records._avatar', ['pet' => $pet, 'size' => 48])
+                                <div>
+                                    <div class="nm">{{ $pet->name }}</div>
+                                    <div class="sub">
+                                        {{ $pet->species ?: 'Pet' }}{{ $pet->breed ? ' · ' . $pet->breed : '' }}
+                                    </div>
+                                    <div class="sub">
+                                        {{ $pet->medical_records_count }} {{ \Illuminate\Support\Str::plural('record', $pet->medical_records_count) }}
+                                    </div>
                                 </div>
                             </div>
-                        </a>
+                        @endif
                     @endforeach
                 </div>
             @endif
@@ -209,7 +224,7 @@
         <div class="section-card">
             <h3>
                 <span><i class="fas fa-calendar-check me-2" style="color: #4A7C59;"></i>Appointment History</span>
-                @if($stats['appointments'] > $appointments->count())
+                @if(auth()->user()->branch !== null && $stats['appointments'] > $appointments->count())
                     <a href="{{ route('admin.appointments.index', ['search' => $owner->email]) }}">View all {{ $stats['appointments'] }} <i class="fas fa-arrow-right ms-1"></i></a>
                 @endif
             </h3>
@@ -225,7 +240,7 @@
                         </thead>
                         <tbody>
                             @foreach($appointments as $a)
-                                <tr onclick="window.location='{{ route('admin.appointments.show', $a->id) }}'">
+                                <tr @if(auth()->user()->branch !== null) onclick="window.location='{{ route('admin.appointments.show', $a->id) }}'" @endif>
                                     <td style="font-weight: 600;">{{ $a->pet->name ?? 'Unknown' }}</td>
                                     <td>{{ $a->branch }}</td>
                                     <td>{{ \Carbon\Carbon::parse($a->appointment_date)->format('M d, Y') }}</td>
@@ -252,10 +267,12 @@
                class="action-btn-lg secondary {{ $owner->phone_number ? '' : 'disabled' }}">
                 <i class="fas fa-phone"></i> Call Owner
             </a>
-            <a href="{{ route('admin.appointments.index', ['search' => $owner->email ?: $owner->name]) }}"
-               class="action-btn-lg secondary">
-                <i class="fas fa-calendar-check"></i> View Appointments
-            </a>
+            @if(auth()->user()->branch !== null)
+                <a href="{{ route('admin.appointments.index', ['search' => $owner->email ?: $owner->name]) }}"
+                   class="action-btn-lg secondary">
+                    <i class="fas fa-calendar-check"></i> View Appointments
+                </a>
+            @endif
             <button type="button" class="action-btn-lg danger mt-3"
                     data-bs-toggle="modal" data-bs-target="#deleteOwnerModal"
                     style="background: #FFF0F0; color: #BA1A1A; border: 1px solid #FFCDD2; cursor: pointer;">

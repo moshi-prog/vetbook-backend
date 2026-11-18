@@ -34,14 +34,14 @@ class AdminSmsNotificationTest extends TestCase
         ]);
     }
 
-    private function createAdmin(): User
+    private function createAdmin(string $branch = 'Mabini Branch'): User
     {
         return User::create([
-            'name' => 'Admin User',
-            'email' => 'admin@vetbook.test',
+            'name' => 'Branch Staff',
+            'email' => uniqid('staff_', true) . '@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
-            'branch' => null,
+            'branch' => $branch,
         ]);
     }
 
@@ -134,7 +134,7 @@ class AdminSmsNotificationTest extends TestCase
 
     public function test_reschedule_appointment_sends_sms_using_custom_rescheduled_template(): void
     {
-        $admin = $this->createAdmin();
+        $admin = $this->createAdmin('Batangas City Branch');
         [$owner, $pet] = $this->createOwnerAndPet();
 
         ClinicSetting::set('sms_template_rescheduled', 'RESCHEDULED: {pet_name} moves to {date} at {time}. See you at {branch}!');
@@ -204,7 +204,7 @@ class AdminSmsNotificationTest extends TestCase
 
     public function test_cancel_appointment_sends_sms_using_custom_cancellation_template(): void
     {
-        $admin = $this->createAdmin();
+        $admin = $this->createAdmin('Batangas City Branch');
         [$owner, $pet] = $this->createOwnerAndPet();
 
         ClinicSetting::set('sms_template_cancellation', 'CANCELLED: {pet_name}\'s visit on {date} was cancelled. Call {branch} to rebook.');

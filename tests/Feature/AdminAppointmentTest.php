@@ -66,11 +66,11 @@ class AdminAppointmentTest extends TestCase
     public function test_filter_by_status(): void
     {
         $admin = User::create([
-            'name' => 'Dr. Super',
+            'name' => 'Uptown Staff',
             'email' => 'super@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
-            'branch' => null,
+            'branch' => 'Uptown',
         ]);
 
         $owner = User::create([
@@ -116,11 +116,11 @@ class AdminAppointmentTest extends TestCase
     public function test_search_filter(): void
     {
         $admin = User::create([
-            'name' => 'Dr. Super',
+            'name' => 'West End Staff',
             'email' => 'super2@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
-            'branch' => null,
+            'branch' => 'West End',
         ]);
 
         $owner = User::create([
@@ -156,11 +156,11 @@ class AdminAppointmentTest extends TestCase
     public function test_case_insensitive_search_across_pet_owner_phone_and_branch(): void
     {
         $admin = User::create([
-            'name' => 'Super Admin',
+            'name' => 'Mabini Staff',
             'email' => 'super_search@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
-            'branch' => null,
+            'branch' => 'Mabini Branch',
         ]);
 
         $owner = User::create([
@@ -211,11 +211,11 @@ class AdminAppointmentTest extends TestCase
     public function test_date_filter_filters_exact_date(): void
     {
         $admin = User::create([
-            'name' => 'Super Admin Date',
+            'name' => 'Mabini Staff Date',
             'email' => 'super_date@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
-            'branch' => null,
+            'branch' => 'Mabini Branch',
         ]);
 
         $owner = User::create([
@@ -260,11 +260,11 @@ class AdminAppointmentTest extends TestCase
     public function test_status_tabs_preserve_active_search_and_date_parameters(): void
     {
         $admin = User::create([
-            'name' => 'Super Admin Query',
+            'name' => 'Mabini Staff Query',
             'email' => 'super_query@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
-            'branch' => null,
+            'branch' => 'Mabini Branch',
         ]);
 
         $response = $this->actingAs($admin)->get('/admin/appointments?search=Max&date=2026-11-20&status=pending');
@@ -280,11 +280,11 @@ class AdminAppointmentTest extends TestCase
     public function test_cancelled_appointment_displays_cancellation_reason_in_table(): void
     {
         $admin = User::create([
-            'name' => 'Super Admin Reason',
+            'name' => 'Mabini Staff Reason',
             'email' => 'super_reason@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
-            'branch' => null,
+            'branch' => 'Mabini Branch',
         ]);
 
         $owner = User::create([

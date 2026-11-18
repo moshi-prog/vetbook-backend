@@ -223,7 +223,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
 
     public function test_admin_approving_creates_appointment_confirmed_notification(): void
     {
-        [$superAdmin] = $this->createAdmins();
+        [, $mabiniAdmin] = $this->createAdmins();
         [$owner, $pet] = $this->createPetOwner();
 
         $appointment = Appointment::create([
@@ -236,7 +236,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
             'reason' => 'Checkup',
         ]);
 
-        $response = $this->actingAs($superAdmin)
+        $response = $this->actingAs($mabiniAdmin)
             ->post("/admin/appointments/{$appointment->id}/approve");
 
         $response->assertStatus(302);
@@ -253,7 +253,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
 
     public function test_admin_completing_creates_visit_completed_notification(): void
     {
-        [$superAdmin] = $this->createAdmins();
+        [, $mabiniAdmin] = $this->createAdmins();
         [$owner, $pet] = $this->createPetOwner();
 
         $appointment = Appointment::create([
@@ -266,7 +266,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
             'reason' => 'Checkup',
         ]);
 
-        $response = $this->actingAs($superAdmin)
+        $response = $this->actingAs($mabiniAdmin)
             ->post("/admin/appointments/{$appointment->id}/complete");
 
         $response->assertStatus(302);
@@ -282,7 +282,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
 
     public function test_admin_rescheduling_creates_rescheduled_by_clinic_notification(): void
     {
-        [$superAdmin] = $this->createAdmins();
+        [, $mabiniAdmin] = $this->createAdmins();
         [$owner, $pet] = $this->createPetOwner();
 
         $appointment = Appointment::create([
@@ -296,7 +296,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
         ]);
 
         $newDate = now()->addDays(7)->toDateString();
-        $response = $this->actingAs($superAdmin)
+        $response = $this->actingAs($mabiniAdmin)
             ->post("/admin/appointments/{$appointment->id}/reschedule", [
                 'appointment_date' => $newDate,
                 'appointment_time' => '15:00',
@@ -317,7 +317,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
 
     public function test_admin_cancelling_creates_cancelled_by_clinic_notification(): void
     {
-        [$superAdmin] = $this->createAdmins();
+        [, $mabiniAdmin] = $this->createAdmins();
         [$owner, $pet] = $this->createPetOwner();
 
         $appointment = Appointment::create([
@@ -330,7 +330,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
             'reason' => 'Checkup',
         ]);
 
-        $response = $this->actingAs($superAdmin)
+        $response = $this->actingAs($mabiniAdmin)
             ->post("/admin/appointments/{$appointment->id}/cancel", [
                 'cancel_reason' => 'Veterinarian on emergency leave',
             ]);
@@ -382,7 +382,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
 
     public function test_cancelled_appointment_details_page_displays_prominent_cancellation_card(): void
     {
-        [$superAdmin] = $this->createAdmins();
+        [, $mabiniAdmin] = $this->createAdmins();
         [$owner, $pet] = $this->createPetOwner();
 
         $appointment = Appointment::create([
@@ -396,7 +396,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
             'notes' => "[Cancelled by Pet Owner] Reason: Schedule conflict\nClient will rebook next week.",
         ]);
 
-        $response = $this->actingAs($superAdmin)
+        $response = $this->actingAs($mabiniAdmin)
             ->get("/admin/appointments/{$appointment->id}");
 
         $response->assertStatus(200);
@@ -408,7 +408,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
 
     public function test_appointment_details_cancel_modal_states_owner_will_be_notified(): void
     {
-        [$superAdmin] = $this->createAdmins();
+        [, $mabiniAdmin] = $this->createAdmins();
         [$owner, $pet] = $this->createPetOwner();
 
         $appointment = Appointment::create([
@@ -421,7 +421,7 @@ class AppointmentOwnerActionNotificationTest extends TestCase
             'reason' => 'Checkup',
         ]);
 
-        $response = $this->actingAs($superAdmin)
+        $response = $this->actingAs($mabiniAdmin)
             ->get("/admin/appointments/{$appointment->id}");
 
         $response->assertStatus(200);

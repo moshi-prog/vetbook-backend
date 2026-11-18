@@ -72,10 +72,11 @@ class PetFieldsAndMedicalRecordVetTest extends TestCase
     public function test_admin_medical_record_form_shows_and_persists_attending_veterinarian(): void
     {
         $admin = User::create([
-            'name' => 'Vet Admin',
+            'name' => 'Vet Staff',
             'email' => 'admin@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
+            'branch' => 'Mabini Branch',
         ]);
 
         $owner = User::create([
@@ -141,10 +142,11 @@ class PetFieldsAndMedicalRecordVetTest extends TestCase
     public function test_medical_record_views_handle_null_consultation_date_safely(): void
     {
         $admin = User::create([
-            'name' => 'Vet Admin',
+            'name' => 'Vet Staff',
             'email' => 'admin2@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
+            'branch' => 'Mabini Branch',
         ]);
         $this->actingAs($admin);
 

@@ -57,7 +57,7 @@ class AdminDashboardTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSee('VetBook');
-        $response->assertSee('ADMIN');
+        $response->assertSee('STAFF');
         $response->assertSee('Dr. Jane Vet');
         $response->assertSee('Main Clinic');
         $response->assertSee('Total Appointments');
@@ -81,7 +81,94 @@ class AdminDashboardTest extends TestCase
         $response = $this->actingAs($admin)->get('/admin');
 
         $response->assertStatus(200);
-        $response->assertSee('All Branches');
-        $response->assertSee('Appointments by Branch');
+        $response->assertSee('ADMIN');
+        $response->assertSee('Account Management');
+        $response->assertSee('Clinic Staff');
+        $response->assertSee('Pet Owner Accounts');
+        $response->assertSee('Clinic Staff &amp; Admin Accounts', false);
+        $response->assertDontSee('Pending Approvals');
+    }
+
+    public function test_admin_is_blocked_from_operational_routes_while_staff_has_access(): void
+    {
+        $admin = User::create([
+            'name' => 'System Admin',
+            'email' => 'sysadmin@vetbook.test',
+            'password' => bcrypt('password123'),
+            'role' => 'admin',
+            'branch' => null,
+        ]);
+
+        $staff = User::create([
+            'name' => 'Mabini Staff',
+            'email' => 'staff@vetbook.test',
+            'password' => bcrypt('password123'),
+            'role' => 'admin',
+            'branch' => 'Mabini Branch',
+        ]);
+
+        foreach (['/admin/appointments', '/admin/pets', '/admin/medical-records', '/admin/sms'] as $route) {
+            $this->actingAs($admin)->get($route)->assertStatus(403);
+            $this->actingAs($staff)->get($route)->assertStatus(200);
+        }
+
+        $this->actingAs($admin)->post('/admin/medical-records/medicines', [
+            'name' => 'Amoxicillin',
+            'stock' => 10,
+        ])->assertStatus(403);
+
+        // Sidebar & topbar checks
+        $adminDash = $this->actingAs($admin)->get('/admin');
+        $adminDash->assertOk()
+            ->assertDontSee('setTimeout(checkAdminAlerts, 2500)', false)
+            ->assertDontSee('<span class="nav-label">Appointments</span>', false)
+            ->assertDontSee('<span class="nav-label">Pets</span>', false)
+            ->assertDontSee('<span class="nav-label">Medical Records</span>', false)
+            ->assertDontSee('<span class="nav-label">SMS Notifications</span>', false);
+
+        $staffDash = $this->actingAs($staff)->get('/admin');
+        $staffDash->assertOk()
+            ->assertSee('Mabini Branch (Staff)')
+            ->assertSee('setTimeout(checkAdminAlerts, 2500)', false)
+            ->assertSee('<span class="nav-label">Appointments</span>', false)
+            ->assertSee('<span class="nav-label">Pets</span>', false)
+            ->assertSee('<span class="nav-label">Medical Records</span>', false)
+            ->assertSee('<span class="nav-label">SMS Notifications</span>', false);
+
+        // Pet owner detail view hides operational clinical links from Admin while showing them to Staff
+        $owner = User::create([
+            'name' => 'Owner Link Check',
+            'email' => 'ownerlink@vetbook.test',
+            'password' => bcrypt('password123'),
+            'role' => 'pet_owner',
+        ]);
+        $pet = Pet::create([
+            'user_id' => $owner->id,
+            'name' => 'Pippin',
+            'species' => 'Dog',
+        ]);
+        Appointment::create([
+            'user_id' => $owner->id,
+            'pet_id' => $pet->id,
+            'branch' => 'Mabini Branch',
+            'appointment_date' => now()->addDay()->toDateString(),
+            'appointment_time' => '10:00 AM',
+            'status' => 'pending',
+            'reason' => 'Checkup',
+        ]);
+
+        $this->actingAs($admin)->get("/admin/pet-owners/{$owner->id}")
+            ->assertOk()
+            ->assertSee('Pippin')
+            ->assertSee('<div class="pet-tile">', false)
+            ->assertDontSee('View Appointments')
+            ->assertDontSee("window.location='", false);
+
+        $this->actingAs($staff)->get("/admin/pet-owners/{$owner->id}")
+            ->assertOk()
+            ->assertSee('Pippin')
+            ->assertSee("<a href=\"" . route('admin.pets.show', $pet->id) . "\" class=\"pet-tile\">", false)
+            ->assertSee('View Appointments')
+            ->assertSee("window.location='", false);
     }
 }

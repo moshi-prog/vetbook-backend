@@ -11,8 +11,17 @@ use Illuminate\Support\Facades\DB;
 
 class AppointmentController extends Controller
 {
+    private function ensureStaffBranch(): void
+    {
+        if (auth()->user()->branch === null) {
+            abort(403, 'Unauthorized. Appointment operations are handled exclusively by Clinic Staff.');
+        }
+    }
+
     public function index(Request $request)
     {
+        $this->ensureStaffBranch();
+
         $user = auth()->user();
         $branch = $user->branch;
 
@@ -143,6 +152,8 @@ class AppointmentController extends Controller
     // Show single appointment detail
     public function show($id)
     {
+        $this->ensureStaffBranch();
+
         $user = auth()->user();
         $appointment = Appointment::with(['pet', 'user'])->findOrFail($id);
 
@@ -162,6 +173,8 @@ class AppointmentController extends Controller
     // Assign veterinarian to an appointment
     public function assignVeterinarian(Request $request, $id)
     {
+        $this->ensureStaffBranch();
+
         $user = auth()->user();
         $appointment = Appointment::findOrFail($id);
 
@@ -182,6 +195,8 @@ class AppointmentController extends Controller
     // Approve a pending appointment
     public function approve($id)
     {
+        $this->ensureStaffBranch();
+
         $user = auth()->user();
         $appointment = Appointment::with(['pet', 'user'])->findOrFail($id);
 
@@ -250,6 +265,8 @@ class AppointmentController extends Controller
     // Mark as completed
     public function complete($id)
     {
+        $this->ensureStaffBranch();
+
         $user = auth()->user();
         $appointment = Appointment::findOrFail($id);
 
@@ -298,6 +315,8 @@ class AppointmentController extends Controller
     // Cancel an appointment
     public function cancel(Request $request, $id)
     {
+        $this->ensureStaffBranch();
+
         $user = auth()->user();
         $appointment = Appointment::findOrFail($id);
 
@@ -364,6 +383,8 @@ class AppointmentController extends Controller
     // Reschedule appointment (change date/time)
     public function reschedule(Request $request, $id)
     {
+        $this->ensureStaffBranch();
+
         $user = auth()->user();
         $appointment = Appointment::findOrFail($id);
 
@@ -460,6 +481,8 @@ class AppointmentController extends Controller
      */
     public function destroy($id)
     {
+        $this->ensureStaffBranch();
+
         $user = auth()->user();
         $appointment = Appointment::findOrFail($id);
 
@@ -478,6 +501,8 @@ class AppointmentController extends Controller
      */
     public function bulkDestroy(Request $request)
     {
+        $this->ensureStaffBranch();
+
         $ids = $request->input('selected_ids', $request->input('ids', []));
         if (is_string($ids)) {
             $ids = array_filter(explode(',', $ids));
@@ -505,6 +530,8 @@ class AppointmentController extends Controller
      */
     public function export(Request $request)
     {
+        $this->ensureStaffBranch();
+
         $user = auth()->user();
         $branch = $user->branch;
         $isPgsql = DB::connection()->getDriverName() === 'pgsql';

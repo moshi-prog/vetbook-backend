@@ -24,10 +24,11 @@ class DeletionIsolationAndSafeguardsTest extends TestCase
         parent::setUp();
 
         $this->admin = User::create([
-            'name'     => 'Clinic Admin',
+            'name'     => 'Mabini Staff',
             'email'    => 'admin@vetbook.test',
             'password' => bcrypt('password123'),
             'role'     => 'admin',
+            'branch'   => 'Mabini Branch',
         ]);
 
         $this->owner = User::create([

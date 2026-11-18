@@ -38,10 +38,10 @@ class TimeStandardizationAndRescheduleHistoryTest extends TestCase
         ]);
     }
 
-    private function createAdmin(?string $branch = null, string $email = 'admin@vetbook.test'): User
+    private function createAdmin(?string $branch = 'Mabini Branch', string $email = 'admin@vetbook.test'): User
     {
         return User::create([
-            'name' => 'Clinic Admin',
+            'name' => $branch ? "{$branch} Staff" : 'System Admin',
             'email' => $email,
             'password' => bcrypt('password123'),
             'role' => 'admin',

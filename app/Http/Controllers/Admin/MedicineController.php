@@ -10,6 +10,8 @@ class MedicineController extends Controller
 {
     public function store(Request $request)
     {
+        $this->ensureStaffBranch();
+
         $data = $this->normalizePayload($this->validateMedicine($request));
         $medicine = Medicine::create($data);
 
@@ -19,6 +21,8 @@ class MedicineController extends Controller
 
     public function updateStock(Request $request, $id)
     {
+        $this->ensureStaffBranch();
+
         $medicine = Medicine::findOrFail($id);
         $this->authorizeBranchAccess($medicine);
 
@@ -50,6 +54,8 @@ class MedicineController extends Controller
 
     public function update(Request $request, $id)
     {
+        $this->ensureStaffBranch();
+
         $medicine = Medicine::findOrFail($id);
         $this->authorizeBranchAccess($medicine);
 
@@ -62,6 +68,8 @@ class MedicineController extends Controller
 
     public function destroy($id)
     {
+        $this->ensureStaffBranch();
+
         $medicine = Medicine::findOrFail($id);
         $this->authorizeBranchAccess($medicine);
 
@@ -70,6 +78,13 @@ class MedicineController extends Controller
 
         return redirect()->back()
             ->with('success', "Medicine '{$name}' deleted from inventory.");
+    }
+
+    private function ensureStaffBranch(): void
+    {
+        if (auth()->user()->branch === null) {
+            abort(403, 'Unauthorized. Medicine inventory is managed exclusively by Clinic Staff.');
+        }
     }
 
     private function validateMedicine(Request $request): array

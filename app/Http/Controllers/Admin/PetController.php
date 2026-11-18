@@ -12,8 +12,17 @@ class PetController extends Controller
     /** Species that get their own filter; everything else counts as "other". */
     private const MAIN_SPECIES = ['dog', 'cat', 'bird', 'rabbit'];
 
+    private function ensureStaffBranch(): void
+    {
+        if (auth()->user()->branch === null) {
+            abort(403, 'Unauthorized. Pet clinical registry is handled exclusively by Clinic Staff.');
+        }
+    }
+
     public function index(Request $request)
     {
+        $this->ensureStaffBranch();
+
         $branch = auth()->user()->branch;
 
         $species = strtolower((string) $request->input('species', 'all'));
@@ -97,6 +106,8 @@ class PetController extends Controller
 
     public function show($id)
     {
+        $this->ensureStaffBranch();
+
         $pet = Pet::with([
             'owner',
             'appointments' => function ($q) {
@@ -112,6 +123,8 @@ class PetController extends Controller
 
     public function updateHealthStatus(Request $request, $id)
     {
+        $this->ensureStaffBranch();
+
         $request->validate([
             'health_status' => 'required|in:healthy,attention',
         ]);
@@ -127,6 +140,8 @@ class PetController extends Controller
 
     public function destroy($id)
     {
+        $this->ensureStaffBranch();
+
         $pet = Pet::findOrFail($id);
 
         // Delete associated records cleanly
@@ -142,6 +157,8 @@ class PetController extends Controller
      */
     public function bulkDestroy(Request $request)
     {
+        $this->ensureStaffBranch();
+
         $ids = $request->input('selected_ids', $request->input('ids', []));
         if (is_string($ids)) {
             $ids = array_filter(explode(',', $ids));
@@ -169,6 +186,8 @@ class PetController extends Controller
      */
     public function export(Request $request)
     {
+        $this->ensureStaffBranch();
+
         $branch = auth()->user()->branch;
         $species = strtolower((string) $request->input('species', 'all'));
         $search = trim((string) $request->input('search', ''));

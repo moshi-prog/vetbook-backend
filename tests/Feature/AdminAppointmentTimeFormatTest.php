@@ -16,11 +16,11 @@ class AdminAppointmentTimeFormatTest extends TestCase
     private function seedAppointmentContext(string $time = '14:30'): array
     {
         $admin = User::create([
-            'name' => 'Super Admin',
+            'name' => 'Mabini Staff',
             'email' => 'admin@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
-            'branch' => null,
+            'branch' => 'Mabini Branch',
         ]);
 
         $owner = User::create([

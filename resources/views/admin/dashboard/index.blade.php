@@ -137,6 +137,173 @@
 
 @section('content')
 
+@if($branch === null)
+{{-- Welcome Header (Admin — Account Management) --}}
+<div class="mb-4">
+    <h2 style="font-family: 'Literata', serif; font-weight: 700; color: #2E3230; margin-bottom: 4px;">
+        Welcome, {{ auth()->user()->name }}
+    </h2>
+    <p style="font-family: 'Nunito Sans', sans-serif; font-size: 14px; color: #6B6358; margin: 0;">
+        You are viewing:
+        <strong style="color: #4A7C59;">
+            Account Management &amp; System Administration
+        </strong>
+    </p>
+</div>
+
+{{-- Admin Stat Cards --}}
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="stat-label">Clinic Staff</div>
+                <div class="stat-icon"><i class="fas fa-user-nurse"></i></div>
+            </div>
+            <div class="stat-value">{{ $staffCount ?? 0 }}</div>
+            <div class="stat-footer">
+                <i class="fas fa-building me-1"></i>
+                Assigned branch staff
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card info">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="stat-label">Pet Owner Accounts</div>
+                <div class="stat-icon"><i class="fas fa-users"></i></div>
+            </div>
+            <div class="stat-value">{{ $totalPetOwners ?? 0 }}</div>
+            <div class="stat-footer">
+                <a href="{{ route('admin.pet-owners.index') }}" style="color: inherit; text-decoration: none;">
+                    <i class="fas fa-mobile-alt me-1"></i>
+                    Registered mobile users
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card success">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="stat-label">New Owners (Month)</div>
+                <div class="stat-icon"><i class="fas fa-user-plus"></i></div>
+            </div>
+            <div class="stat-value">{{ $newOwnersThisMonth ?? 0 }}</div>
+            <div class="stat-footer" style="color: #2A6038;">
+                <i class="fas fa-calendar-alt me-1"></i>
+                Joined this month
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card warning">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="stat-label">Clinic Branches</div>
+                <div class="stat-icon"><i class="fas fa-hospital"></i></div>
+            </div>
+            <div class="stat-value">{{ $activeBranchesCount ?? 2 }}</div>
+            <div class="stat-footer" style="color: #705C30;">
+                <i class="fas fa-location-dot me-1"></i>
+                Mabini &amp; Batangas City
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- Admin Two-Column Account Overview --}}
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="content-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h3>Clinic Staff &amp; Admin Accounts</h3>
+                    <div class="subtitle">System administrators and branch staff accounts</div>
+                </div>
+                <a href="{{ route('admin.settings.index') }}#admins"
+                   style="font-family: 'Nunito Sans', sans-serif; font-size: 12px; font-weight: 600; color: #4A7C59; text-decoration: none;">
+                    Manage Accounts <i class="fas fa-arrow-right ms-1"></i>
+                </a>
+            </div>
+
+            @if(($adminAccounts ?? collect())->isEmpty())
+                <div class="text-center py-5" style="color: #6B6358;">
+                    <i class="fas fa-user-shield fa-2x mb-3" style="opacity: 0.4;"></i>
+                    <p style="font-family: 'Nunito Sans', sans-serif; margin: 0;">
+                        No accounts found
+                    </p>
+                </div>
+            @else
+                <table class="appt-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Station</th>
+                            <th>Role</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($adminAccounts as $acct)
+                            <tr>
+                                <td style="font-weight: 600;">{{ $acct->name }}</td>
+                                <td>{{ $acct->email }}</td>
+                                <td>{{ $acct->branch ?? 'Account Management' }}</td>
+                                <td>
+                                    <span class="status-pill {{ $acct->branch ? 'approved' : 'completed' }}">
+                                        {{ $acct->branch ? 'Staff' : 'Admin' }}
+                                    </span>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @endif
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="content-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h3>Recent Pet Owner Accounts</h3>
+                    <div class="subtitle">Latest registered mobile app users</div>
+                </div>
+                <a href="{{ route('admin.pet-owners.index') }}"
+                   style="font-family: 'Nunito Sans', sans-serif; font-size: 12px; font-weight: 600; color: #4A7C59; text-decoration: none;">
+                    See All <i class="fas fa-arrow-right ms-1"></i>
+                </a>
+            </div>
+
+            @if(($recentPetOwners ?? collect())->isEmpty())
+                <div class="text-center py-5" style="color: #6B6358;">
+                    <i class="fas fa-users fa-2x mb-3" style="opacity: 0.4;"></i>
+                    <p style="font-family: 'Nunito Sans', sans-serif; margin: 0;">
+                        No pet owner accounts yet
+                    </p>
+                </div>
+            @else
+                <table class="appt-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Joined</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($recentPetOwners as $owner)
+                            <tr>
+                                <td style="font-weight: 600;">{{ $owner->name }}</td>
+                                <td>{{ $owner->email }}</td>
+                                <td>{{ $owner->created_at?->format('M d, Y') }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @endif
+        </div>
+    </div>
+</div>
+@else
 {{-- Welcome Header --}}
 <div class="mb-4">
     <h2 style="font-family: 'Literata', serif; font-weight: 700; color: #2E3230; margin-bottom: 4px;">
@@ -145,7 +312,7 @@
     <p style="font-family: 'Nunito Sans', sans-serif; font-size: 14px; color: #6B6358; margin: 0;">
         You are viewing:
         <strong style="color: #4A7C59;">
-            {{ $branch ?? 'All Branches' }}
+            {{ $branch }} (Staff)
         </strong>
     </p>
 </div>
@@ -301,5 +468,6 @@
     </div>
 
 </div>
+@endif
 
 @endsection

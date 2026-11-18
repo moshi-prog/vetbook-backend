@@ -18,6 +18,8 @@ class SmsController extends Controller
 
     public function index(Request $request)
     {
+        $this->ensureStaffBranch();
+
         $search = trim((string) $request->input('search', ''));
         $type = $request->input('type', 'all');
         $status = $request->input('status', 'all');
@@ -128,12 +130,23 @@ class SmsController extends Controller
 
     public function sendTest(Request $request)
     {
+        $this->ensureStaffBranch();
+
         return $this->dispatchSms($request, 'test');
     }
 
     public function compose(Request $request)
     {
+        $this->ensureStaffBranch();
+
         return $this->dispatchSms($request, 'general');
+    }
+
+    private function ensureStaffBranch(): void
+    {
+        if (auth()->user()->branch === null) {
+            abort(403, 'Unauthorized. SMS dispatch logs are handled exclusively by Clinic Staff.');
+        }
     }
 
     /**

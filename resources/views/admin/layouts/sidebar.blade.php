@@ -10,7 +10,7 @@
                 <img src="{{ $sidebarLogoUrl }}" alt="Logo" class="rounded-circle" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null; this.src='{{ $fallbackLogoUrl }}';">
             </span>
             <span class="brand-title">VetBook</span>
-            <span class="badge brand-badge ms-1">ADMIN</span>
+            <span class="badge brand-badge ms-1">{{ auth()->check() && auth()->user()->branch !== null ? 'STAFF' : 'ADMIN' }}</span>
         </a>
     </div>
 
@@ -24,7 +24,7 @@
                 <div class="user-name text-truncate">{{ auth()->user()?->name ?? 'Admin User' }}</div>
                 <span class="badge user-branch-badge text-truncate" style="max-width: 150px;">
                     <i class="fa-solid fa-code-branch me-1"></i>
-                    {{ auth()->user()?->branch ?? 'All Branches' }}
+                    {{ auth()->user()?->branch ? auth()->user()->branch . ' (Staff)' : 'Account Management' }}
                 </span>
             </div>
         </div>
@@ -40,6 +40,7 @@
                     <span class="nav-label">Dashboard</span>
                 </a>
             </li>
+            @if(auth()->check() && auth()->user()->branch !== null)
             <li class="nav-item">
                 <a class="nav-link {{ request()->routeIs('admin.appointments.*') || request()->routeIs('admin.appointments.index') ? 'active' : '' }}" 
                    href="{{ Route::has('admin.appointments.index') ? route('admin.appointments.index') : url('/admin/appointments') }}">
@@ -61,6 +62,7 @@
                     <span class="nav-label">Medical Records</span>
                 </a>
             </li>
+            @endif
             <li class="nav-item">
                 <a class="nav-link {{ request()->routeIs('admin.pet-owners.*') || request()->routeIs('admin.pet-owners.index') ? 'active' : '' }}" 
                    href="{{ Route::has('admin.pet-owners.index') ? route('admin.pet-owners.index') : url('/admin/pet-owners') }}">
@@ -68,6 +70,7 @@
                     <span class="nav-label">Pet Owners</span>
                 </a>
             </li>
+            @if(auth()->check() && auth()->user()->branch !== null)
             <li class="nav-item">
                 <a class="nav-link {{ request()->routeIs('admin.sms.*') || request()->routeIs('admin.sms.index') ? 'active' : '' }}" 
                    href="{{ Route::has('admin.sms.index') ? route('admin.sms.index') : url('/admin/sms') }}">
@@ -75,6 +78,7 @@
                     <span class="nav-label">SMS Notifications</span>
                 </a>
             </li>
+            @endif
             <li class="nav-item">
                 <a class="nav-link {{ request()->routeIs('admin.settings.*') || request()->routeIs('admin.settings.index') ? 'active' : '' }}" 
                    href="{{ Route::has('admin.settings.index') ? route('admin.settings.index') : url('/admin/settings') }}">

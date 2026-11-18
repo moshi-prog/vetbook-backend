@@ -400,9 +400,9 @@
                         <i class="fa-solid fa-location-dot"></i>
                         <span>
                             @if(auth()->check() && auth()->user()->branch)
-                                {{ auth()->user()->branch }}
+                                {{ auth()->user()->branch }} (Staff)
                             @else
-                                All Branches
+                                Account Management
                             @endif
                         </span>
                     </div>
@@ -418,7 +418,7 @@
                                     {{ auth()->user()->name ?? 'Admin User' }}
                                 </div>
                                 <div class="text-muted" style="font-size: 0.72rem;">
-                                    {{ ucfirst(auth()->user()->role ?? 'Admin') }}
+                                    {{ (auth()->check() && auth()->user()->branch !== null) ? 'Staff' : 'Admin' }}
                                 </div>
                             </div>
                             <i class="fa-solid fa-chevron-down text-muted" style="font-size: 0.75rem;"></i>
@@ -677,6 +677,7 @@
                 }
             }
 
+            @if(auth()->check() && auth()->user()->branch !== null)
             // Start polling after page finishes rendering (2.5s delay), and skip if tab is in background
             setTimeout(checkAdminAlerts, 2500);
             setInterval(function () {
@@ -684,6 +685,7 @@
                     checkAdminAlerts();
                 }
             }, 30000);
+            @endif
         });
     </script>
     @yield('scripts')

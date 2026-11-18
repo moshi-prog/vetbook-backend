@@ -18,8 +18,17 @@ class MedicalRecordController extends Controller
     /** Days before a follow-up date at which a vaccine is flagged as "due soon". */
     private const DUE_SOON_DAYS = 30;
 
+    private function ensureStaffBranch(): void
+    {
+        if (auth()->user()->branch === null) {
+            abort(403, 'Unauthorized. Medical records are handled exclusively by Clinic Staff.');
+        }
+    }
+
     public function index(Request $request)
     {
+        $this->ensureStaffBranch();
+
         $branch = auth()->user()->branch;
 
         $search = trim((string) $request->input('search', ''));
@@ -106,6 +115,8 @@ class MedicalRecordController extends Controller
 
     public function show($id)
     {
+        $this->ensureStaffBranch();
+
         $record = MedicalRecord::with([
             'pet.owner',
             'pet.appointments' => function ($q) {
@@ -118,6 +129,8 @@ class MedicalRecordController extends Controller
 
     public function petRecords($petId)
     {
+        $this->ensureStaffBranch();
+
         $branch = auth()->user()->branch;
 
         $pet = Pet::with([
@@ -139,6 +152,8 @@ class MedicalRecordController extends Controller
 
     public function create(Request $request)
     {
+        $this->ensureStaffBranch();
+
         return view('admin.medical-records.form', [
             'record' => null,
             'pets' => $this->petOptions(),
@@ -149,6 +164,8 @@ class MedicalRecordController extends Controller
 
     public function store(Request $request)
     {
+        $this->ensureStaffBranch();
+
         $data = $this->validated($request);
         $dispensedItems = $this->extractDispensedMedicines($request);
 
@@ -220,6 +237,8 @@ class MedicalRecordController extends Controller
 
     public function edit($id)
     {
+        $this->ensureStaffBranch();
+
         $record = MedicalRecord::findOrFail($id);
 
         return view('admin.medical-records.form', [
@@ -232,6 +251,8 @@ class MedicalRecordController extends Controller
 
     public function update(Request $request, $id)
     {
+        $this->ensureStaffBranch();
+
         $record = MedicalRecord::findOrFail($id);
         $data = $this->validated($request);
 
@@ -250,6 +271,8 @@ class MedicalRecordController extends Controller
 
     public function destroy(Request $request, $id)
     {
+        $this->ensureStaffBranch();
+
         $record = MedicalRecord::findOrFail($id);
         $petId = $record->pet_id;
         $record->delete();
@@ -268,6 +291,8 @@ class MedicalRecordController extends Controller
      */
     public function bulkDestroy(Request $request)
     {
+        $this->ensureStaffBranch();
+
         $ids = $request->input('selected_ids', $request->input('ids', []));
         if (is_string($ids)) {
             $ids = array_filter(explode(',', $ids));
@@ -288,6 +313,8 @@ class MedicalRecordController extends Controller
      */
     public function export(Request $request)
     {
+        $this->ensureStaffBranch();
+
         $branch = auth()->user()->branch;
         $search = trim((string) $request->input('search', ''));
         $period = $request->input('period', 'all');

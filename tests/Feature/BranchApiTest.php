@@ -259,7 +259,7 @@ class BranchApiTest extends TestCase
         $view = $this->actingAs($mabini)->get('/admin/settings');
         $view->assertStatus(200);
         $view->assertSee('Read-Only');
-        $view->assertSee('managed exclusively by Super Admin');
+        $view->assertSee('managed exclusively by Admin');
         $view->assertDontSee('id="triggerLogoPickerBtn"', false);
         $view->assertDontSee('id="cropperModal"', false);
     }

@@ -123,11 +123,19 @@ class AdminBranchScopingAndCsvExportTest extends TestCase
     public function test_pet_csv_export_includes_health_status_column(): void
     {
         $admin = User::create([
-            'name' => 'Super Admin',
+            'name' => 'System Admin',
             'email' => 'super@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
             'branch' => null,
+        ]);
+
+        $staff = User::create([
+            'name' => 'Mabini Staff',
+            'email' => 'mabinistaff@vetbook.test',
+            'password' => bcrypt('password123'),
+            'role' => 'admin',
+            'branch' => 'Mabini Branch',
         ]);
 
         $owner = User::create([
@@ -151,7 +159,12 @@ class AdminBranchScopingAndCsvExportTest extends TestCase
             'health_status' => 'healthy',
         ]);
 
-        $response = $this->actingAs($admin)->get('/admin/pets/export?format=csv');
+        // System Admin (branch = null) is blocked from operational appointment and pet exports
+        $this->actingAs($admin)->get('/admin/appointments')->assertStatus(403);
+        $this->actingAs($admin)->get('/admin/appointments/export?format=csv')->assertStatus(403);
+        $this->actingAs($admin)->get('/admin/pets/export?format=csv')->assertStatus(403);
+
+        $response = $this->actingAs($staff)->get('/admin/pets/export?format=csv');
         $response->assertStatus(200);
 
         $csv = $response->streamedContent();

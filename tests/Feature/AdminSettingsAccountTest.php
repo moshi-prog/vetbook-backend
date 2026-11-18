@@ -44,7 +44,7 @@ class AdminSettingsAccountTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('My Admin Account');
         $response->assertSee('Change Password');
-        $response->assertSee('Admin Staff Accounts');
+        $response->assertSee('Clinic Staff Accounts');
         $response->assertSee($branchAdmin->name);
         $response->assertSee($superAdmin->name);
     }
@@ -110,7 +110,7 @@ class AdminSettingsAccountTest extends TestCase
         $this->assertSame(1, preg_match('/id="tab-preferences"[\s\S]*$/', $html, $matches));
         $prefsHtml = $matches[0];
         $this->assertStringContainsString('branch.locked@vetbook.test', $prefsHtml);
-        $this->assertStringContainsString('Email is managed exclusively by Super Admin', $prefsHtml);
+        $this->assertStringContainsString('Email is managed exclusively by Admin', $prefsHtml);
         $this->assertStringNotContainsString('name="email"', $prefsHtml);
 
         // Saving name & personal phone without email succeeds
@@ -183,11 +183,11 @@ class AdminSettingsAccountTest extends TestCase
         // Settings page hides Change Password, Admin Users tab, and Super-Admin branch management controls
         $response = $this->actingAs($branchAdmin)->get('/admin/settings');
         $response->assertStatus(200);
-        $response->assertSee('My Admin Account');
-        $response->assertSee('Email is managed exclusively by Super Admin');
+        $response->assertSee('My Staff Account');
+        $response->assertSee('Email is managed exclusively by Admin');
         $response->assertDontSee('Change Password');
         $response->assertDontSee('data-tab="admins"', false);
-        $response->assertDontSee('Admin Staff Accounts');
+        $response->assertDontSee('Clinic Staff Accounts');
         $response->assertDontSee('id="addAdminModal"', false);
         $response->assertDontSee('id="addBranchModal"', false);
         $response->assertDontSee('Add New Branch');
@@ -425,8 +425,8 @@ class AdminSettingsAccountTest extends TestCase
         $response->assertSee('Branch Operating Schedules');
         $response->assertSee('Mabini Branch Schedule');
         $response->assertSee('Batangas City Branch Schedule');
-        $response->assertSee('Managed exclusively by Mabini Branch Admin');
-        $response->assertSee('Managed exclusively by Batangas City Branch Admin');
+        $response->assertSee('Managed exclusively by Mabini Branch Staff');
+        $response->assertSee('Managed exclusively by Batangas City Branch Staff');
 
         $response->assertSee('Multi-branch self-service provisioning is managed via clinic onboarding.');
         $response->assertDontSee('Branch registered in pilot registry');

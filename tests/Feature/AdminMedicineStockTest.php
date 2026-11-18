@@ -14,10 +14,10 @@ class AdminMedicineStockTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function createAdmin(?string $branch = null): User
+    private function createAdmin(?string $branch = 'Mabini Branch'): User
     {
         return User::create([
-            'name' => $branch ? "{$branch} Admin" : 'Super Admin',
+            'name' => $branch ? "{$branch} Staff" : 'System Admin',
             'email' => uniqid('admin_', true) . '@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',

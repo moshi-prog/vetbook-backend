@@ -20,6 +20,7 @@ class MedicalRecordAuthorizationTest extends TestCase
             'email' => uniqid($role . '_', true) . '@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => $role,
+            'branch' => $role === 'admin' ? 'Mabini Branch' : null,
             'phone_number' => '09171234567',
         ]);
     }

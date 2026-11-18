@@ -413,7 +413,7 @@
         @else
             <div class="branch-badge-note" style="background: #F0ECE4; color: #4A4E4A;">
                 <i class="fa-solid fa-hospital-user"></i>
-                Super Admin Scope &mdash; All Clinic Branches
+                Admin Scope &mdash; All Clinic Branches
             </div>
         @endif
     </div>

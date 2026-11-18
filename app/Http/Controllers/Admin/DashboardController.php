@@ -13,7 +13,31 @@ class DashboardController extends Controller
     public function index()
     {
         $user = auth()->user();
-        $branch = $user->branch; // null = super admin (all branches)
+        $branch = $user->branch; // null = Admin (Account Management), non-null = Staff branch
+
+        if ($branch === null) {
+            $adminAccounts = User::where('role', 'admin')->orderBy('id')->get();
+            $staffCount = $adminAccounts->whereNotNull('branch')->count();
+            $totalPetOwners = User::where('role', 'pet_owner')->count();
+            $newOwnersThisMonth = User::where('role', 'pet_owner')
+                ->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])
+                ->count();
+            $recentPetOwners = User::where('role', 'pet_owner')
+                ->orderByDesc('created_at')
+                ->limit(8)
+                ->get();
+            $activeBranchesCount = 2;
+
+            return view('admin.dashboard.index', compact(
+                'branch',
+                'adminAccounts',
+                'staffCount',
+                'totalPetOwners',
+                'newOwnersThisMonth',
+                'recentPetOwners',
+                'activeBranchesCount'
+            ));
+        }
 
         // Base queries with optional branch filter
         $appointmentsQuery = Appointment::query();

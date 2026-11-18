@@ -141,20 +141,20 @@ class AdminBookingAlertsAndLiveSyncTest extends TestCase
         ]);
 
         // Default: newest_booked (sorted by created_at desc) -> Appt 2 should be first
-        $response = $this->actingAs($this->superAdmin)->get(route('admin.appointments.index'));
+        $response = $this->actingAs($this->mabiniAdmin)->get(route('admin.appointments.index'));
         $response->assertOk();
 
         $appointments = $response->viewData('appointments');
         $this->assertEquals($appt2->id, $appointments->first()->id);
 
         // Explicit ?sort=appointment_date (sorted by appointment_date desc) -> Appt 1 (10 days in future) first
-        $responseDate = $this->actingAs($this->superAdmin)->get(route('admin.appointments.index', ['sort' => 'appointment_date']));
+        $responseDate = $this->actingAs($this->mabiniAdmin)->get(route('admin.appointments.index', ['sort' => 'appointment_date']));
         $responseDate->assertOk();
         $appointmentsDate = $responseDate->viewData('appointments');
         $this->assertEquals($appt1->id, $appointmentsDate->first()->id);
 
         // Explicit ?sort=oldest (sorted by created_at asc) -> Appt 1 first
-        $responseOldest = $this->actingAs($this->superAdmin)->get(route('admin.appointments.index', ['sort' => 'oldest']));
+        $responseOldest = $this->actingAs($this->mabiniAdmin)->get(route('admin.appointments.index', ['sort' => 'oldest']));
         $responseOldest->assertOk();
         $appointmentsOldest = $responseOldest->viewData('appointments');
         $this->assertEquals($appt1->id, $appointmentsOldest->first()->id);
@@ -162,7 +162,7 @@ class AdminBookingAlertsAndLiveSyncTest extends TestCase
 
     public function test_admin_appointments_has_sort_selector_and_live_sync_elements(): void
     {
-        $response = $this->actingAs($this->superAdmin)->get(route('admin.appointments.index'));
+        $response = $this->actingAs($this->mabiniAdmin)->get(route('admin.appointments.index'));
         $response->assertOk();
 
         // Sort selector
@@ -215,7 +215,7 @@ class AdminBookingAlertsAndLiveSyncTest extends TestCase
 
     public function test_admin_routes_return_anti_cache_headers(): void
     {
-        $response = $this->actingAs($this->superAdmin)->get('/admin/appointments');
+        $response = $this->actingAs($this->mabiniAdmin)->get('/admin/appointments');
 
         $response->assertOk();
         $cacheControl = $response->headers->get('Cache-Control');

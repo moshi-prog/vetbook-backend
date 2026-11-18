@@ -17,10 +17,21 @@ class AdminAlertsDeletesPushAndDynamicHoursTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function createStaff(string $branch = 'Mabini Branch'): User
+    {
+        return User::create([
+            'name' => 'Branch Staff',
+            'email' => uniqid('staff_', true) . '@vetbook.test',
+            'password' => bcrypt('password123'),
+            'role' => 'admin',
+            'branch' => $branch,
+        ]);
+    }
+
     private function createAdmin(): User
     {
         return User::create([
-            'name' => 'Super Admin',
+            'name' => 'System Admin',
             'email' => 'admin@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
@@ -52,8 +63,9 @@ class AdminAlertsDeletesPushAndDynamicHoursTest extends TestCase
     public function test_admin_can_fetch_unread_alerts_and_mark_as_read(): void
     {
         $admin = $this->createAdmin();
+        $staff = $this->createStaff();
 
-        $notification = AppNotification::create([
+        AppNotification::create([
             'user_id' => $admin->id,
             'title' => 'Appointment Cancelled by Owner',
             'message' => 'Maria cancelled their appointment for Bantay.',
@@ -61,7 +73,20 @@ class AdminAlertsDeletesPushAndDynamicHoursTest extends TestCase
             'data' => ['appointment_id' => 99],
         ]);
 
-        $response = $this->actingAs($admin)->getJson('/admin/notifications/unread-alerts');
+        // System Admin (branch = null) does not receive operational appointment alert polls
+        $adminResponse = $this->actingAs($admin)->getJson('/admin/notifications/unread-alerts');
+        $adminResponse->assertStatus(200);
+        $adminResponse->assertJsonCount(0, 'alerts');
+
+        $notification = AppNotification::create([
+            'user_id' => $staff->id,
+            'title' => 'Appointment Cancelled by Owner',
+            'message' => 'Maria cancelled their appointment for Bantay.',
+            'type' => 'appointment_cancelled_by_owner',
+            'data' => ['appointment_id' => 99],
+        ]);
+
+        $response = $this->actingAs($staff)->getJson('/admin/notifications/unread-alerts');
         $response->assertStatus(200);
         $response->assertJsonPath('status', 'success');
         $response->assertJsonCount(1, 'alerts');
@@ -69,18 +94,18 @@ class AdminAlertsDeletesPushAndDynamicHoursTest extends TestCase
         $response->assertJsonPath('alerts.0.appointment_id', 99);
 
         // Mark as read
-        $markResponse = $this->actingAs($admin)->postJson("/admin/notifications/{$notification->id}/mark-read");
+        $markResponse = $this->actingAs($staff)->postJson("/admin/notifications/{$notification->id}/mark-read");
         $markResponse->assertStatus(200);
         $this->assertNotNull($notification->fresh()->read_at);
 
         // Fetch again - should be empty since read
-        $emptyResponse = $this->actingAs($admin)->getJson('/admin/notifications/unread-alerts');
+        $emptyResponse = $this->actingAs($staff)->getJson('/admin/notifications/unread-alerts');
         $emptyResponse->assertJsonCount(0, 'alerts');
     }
 
     public function test_admin_can_delete_appointment(): void
     {
-        $admin = $this->createAdmin();
+        $staff = $this->createStaff();
         [$owner, $pet] = $this->createPetOwnerWithPet();
 
         $appointment = Appointment::create([
@@ -93,7 +118,7 @@ class AdminAlertsDeletesPushAndDynamicHoursTest extends TestCase
             'reason' => 'Checkup',
         ]);
 
-        $response = $this->actingAs($admin)->delete("/admin/appointments/{$appointment->id}");
+        $response = $this->actingAs($staff)->delete("/admin/appointments/{$appointment->id}");
         $response->assertRedirect('/admin/appointments');
         $response->assertSessionHas('success', 'Appointment deleted successfully.');
 
@@ -102,7 +127,7 @@ class AdminAlertsDeletesPushAndDynamicHoursTest extends TestCase
 
     public function test_admin_can_delete_pet_owner_and_cascades(): void
     {
-        $admin = $this->createAdmin();
+        $admin = $this->createStaff();
         [$owner, $pet] = $this->createPetOwnerWithPet();
 
         $appointment = Appointment::create([
@@ -160,7 +185,7 @@ class AdminAlertsDeletesPushAndDynamicHoursTest extends TestCase
             'https://exp.host/--/api/v2/push/send' => Http::response(['data' => ['status' => 'ok']], 200),
         ]);
 
-        $admin = $this->createAdmin();
+        $admin = $this->createStaff();
         [$owner, $pet] = $this->createPetOwnerWithPet();
 
         $appointment = Appointment::create([

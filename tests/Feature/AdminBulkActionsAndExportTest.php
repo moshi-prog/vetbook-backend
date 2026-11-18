@@ -24,10 +24,11 @@ class AdminBulkActionsAndExportTest extends TestCase
         parent::setUp();
 
         $this->admin = User::create([
-            'name'     => 'Super Admin',
+            'name'     => 'Mabini Staff',
             'email'    => 'admin@vetbook.test',
             'password' => bcrypt('password123'),
             'role'     => 'admin',
+            'branch'   => 'Mabini Branch',
         ]);
 
         $this->owner = User::create([
@@ -76,7 +77,7 @@ class AdminBulkActionsAndExportTest extends TestCase
         $appt2 = Appointment::create([
             'user_id'          => $this->owner->id,
             'pet_id'           => $this->pet2->id,
-            'branch'           => 'Batangas City Branch',
+            'branch'           => 'Mabini Branch',
             'appointment_date' => now()->addDay()->toDateString(),
             'appointment_time' => '11:00:00',
             'status'           => 'approved',

@@ -16,10 +16,11 @@ class AdminPetShowTest extends TestCase
     public function test_admin_can_view_comprehensive_pet_details(): void
     {
         $admin = User::create([
-            'name' => 'Super Admin',
+            'name' => 'Mabini Staff',
             'email' => 'admin@vetbook.test',
             'password' => bcrypt('password123'),
             'role' => 'admin',
+            'branch' => 'Mabini Branch',
         ]);
 
         $owner = User::create([
@@ -120,6 +121,7 @@ class AdminPetShowTest extends TestCase
             'email' => 'admin.index@example.com',
             'password' => bcrypt('password123'),
             'role' => 'admin',
+            'branch' => 'Mabini Branch',
         ]);
 
         $owner = User::create([
