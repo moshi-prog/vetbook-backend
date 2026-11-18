@@ -53,10 +53,11 @@ class BranchContactsAndAddressesTest extends TestCase
         $response->assertSee('Contact number can only be updated by the assigned Branch Admin.');
         $this->assertSame(0, preg_match('/id="editBranchModal-[^"]+"[\s\S]*?name="phone"/', $html));
 
-        // Tab 5 & 6 Super Admin exclusive sections & clarified helper text
+        // Tab 5 & 6 Super Admin exclusive sections & hidden personal mobile number field
         $response->assertSee('data-tab="admins"', false);
         $response->assertSee('Change Password');
-        $response->assertSee('Personal staff contact only. To update your branch clinic hotline for pet owners and the AI chatbot, use Clinic Information or Branches.');
+        $response->assertDontSee('Personal Admin Mobile Number');
+        $response->assertDontSee('Personal staff contact only.');
     }
 
     public function test_branch_admin_only_sees_own_branch_contact_and_read_only_address(): void
@@ -85,10 +86,12 @@ class BranchContactsAndAddressesTest extends TestCase
         $resMabini->assertDontSee('Add New Branch');
         $resMabini->assertDontSee('Deactivate');
 
-        // Tab 5 Admin Users & Change Password hidden for Branch Admin; email locked in Preferences & Account
+        // Tab 5 Admin Users & Change Password hidden for Branch Admin; email locked in Preferences & Account; personal mobile visible
         $resMabini->assertDontSee('data-tab="admins"', false);
         $resMabini->assertDontSee('Change Password');
         $resMabini->assertSee('Email is managed exclusively by Super Admin');
+        $resMabini->assertSee('Personal Admin Mobile Number');
+        $resMabini->assertSee('Personal staff contact only. To update your branch clinic hotline for pet owners and the AI chatbot, use Clinic Information or Branches.');
         $this->assertSame(1, preg_match('/id="tab-preferences"[\s\S]*$/', $mabiniHtml, $prefsMatch));
         $this->assertStringNotContainsString('name="email"', $prefsMatch[0]);
 

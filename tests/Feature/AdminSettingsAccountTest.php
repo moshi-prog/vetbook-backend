@@ -68,6 +68,24 @@ class AdminSettingsAccountTest extends TestCase
         $this->assertEquals('09171234567', $admin->phone_number);
     }
 
+    public function test_super_admin_profile_update_without_phone_number_preserves_existing_phone_number(): void
+    {
+        $superAdmin = $this->createSuperAdmin(['phone_number' => '09178889999']);
+
+        $response = $this->actingAs($superAdmin)->post('/admin/profile/update', [
+            'name' => 'Updated Super Name',
+            'email' => 'updated.super@vetbook.test',
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success', 'Account details updated successfully.');
+
+        $superAdmin->refresh();
+        $this->assertSame('Updated Super Name', $superAdmin->name);
+        $this->assertSame('updated.super@vetbook.test', $superAdmin->email);
+        $this->assertSame('09178889999', $superAdmin->phone_number);
+    }
+
     public function test_admin_profile_update_validates_unique_email(): void
     {
         $admin1 = $this->createSuperAdmin(['email' => 'admin1@vetbook.test']);

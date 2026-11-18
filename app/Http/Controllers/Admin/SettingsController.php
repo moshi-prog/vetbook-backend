@@ -228,7 +228,9 @@ class SettingsController extends Controller
 
         $user->name = $request->name;
         $user->email = $request->email;
-        $user->phone_number = $request->phone_number;
+        if ($request->has('phone_number')) {
+            $user->phone_number = $request->phone_number;
+        }
         $user->save();
 
         $this->forgetBranchesCache();

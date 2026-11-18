@@ -785,14 +785,16 @@
                     @endif
                 </div>
 
-                <div class="col-md-6">
-                    <label class="f-label">Personal Admin Mobile Number</label>
-                    <input type="text" name="phone_number" class="f-input @error('phone_number') is-invalid @enderror" value="{{ old('phone_number', auth()->user()->phone_number) }}" placeholder="e.g. 09171234567">
-                    <div class="f-help">Personal staff contact only. To update your branch clinic hotline for pet owners and the AI chatbot, use Clinic Information or Branches.</div>
-                    @error('phone_number')
-                        <div class="text-danger small mt-1">{{ $message }}</div>
-                    @enderror
-                </div>
+                @if(auth()->user()->branch !== null)
+                    <div class="col-md-6">
+                        <label class="f-label">Personal Admin Mobile Number</label>
+                        <input type="text" name="phone_number" class="f-input @error('phone_number') is-invalid @enderror" value="{{ old('phone_number', auth()->user()->phone_number) }}" placeholder="e.g. 09171234567">
+                        <div class="f-help">Personal staff contact only. To update your branch clinic hotline for pet owners and the AI chatbot, use Clinic Information or Branches.</div>
+                        @error('phone_number')
+                            <div class="text-danger small mt-1">{{ $message }}</div>
+                        @enderror
+                    </div>
+                @endif
 
                 <div class="col-md-6">
                     <label class="f-label">Branch Assignment</label>
