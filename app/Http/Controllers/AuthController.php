@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\PasswordResetMail;
 use App\Mail\VerifyEmailCodeMail;
+use App\Models\AppNotification;
 use App\Models\EmailVerificationCode;
 use App\Models\User;
 use App\Services\PushNotificationService;
@@ -54,10 +55,13 @@ class AuthController extends Controller
                 ], 400);
             }
 
+            $requireStaffApproval = $request->boolean('require_staff_approval', true);
+
             $existingUser->update([
-                'name'         => trim($request->name),
-                'password'     => Hash::make($request->password),
-                'phone_number' => $request->phone_number,
+                'name'            => trim($request->name),
+                'password'        => Hash::make($request->password),
+                'phone_number'    => $request->phone_number,
+                'approval_status' => $requireStaffApproval ? 'pending' : 'approved',
             ]);
 
             $user = $existingUser;
@@ -77,6 +81,8 @@ class AuthController extends Controller
                 ], 400);
             }
 
+            $requireStaffApproval = $request->boolean('require_staff_approval', true);
+
             $user = User::create([
                 'name'              => trim($request->name),
                 'email'             => $email,
@@ -84,7 +90,25 @@ class AuthController extends Controller
                 'phone_number'      => $request->phone_number,
                 'role'              => 'pet_owner',
                 'email_verified_at' => null,
+                'approval_status'   => $requireStaffApproval ? 'pending' : 'approved',
             ]);
+        }
+
+        if ($user->approval_status === 'pending') {
+            try {
+                $staffUsers = User::where('role', 'admin')->whereNotNull('branch')->get();
+                foreach ($staffUsers as $staff) {
+                    AppNotification::create([
+                        'user_id' => $staff->id,
+                        'title'   => 'New Pet Owner Registration',
+                        'message' => "{$user->name} ({$user->email}) registered and is awaiting staff account approval.",
+                        'type'    => 'account_approval_needed',
+                        'data'    => ['pet_owner_id' => $user->id],
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('Failed creating staff approval notification: ' . $e->getMessage());
+            }
         }
 
         // Generate fresh 6-digit code
@@ -172,11 +196,14 @@ class AuthController extends Controller
         EmailVerificationCode::where('email', $email)->delete();
 
         $token = JWTAuth::fromUser($user);
+        $approvalStatus = $user->approval_status ?? 'approved';
 
         return response()->json([
-            'message' => 'Email verified successfully. Welcome to VetBook!',
-            'token'   => $token,
-            'user'    => $user,
+            'message'                => 'Email verified successfully. Welcome to VetBook!',
+            'token'                  => $token,
+            'user'                   => $user,
+            'approval_status'        => $approvalStatus,
+            'pending_staff_approval' => $approvalStatus === 'pending',
         ], 200);
     }
 
@@ -326,6 +353,32 @@ class AuthController extends Controller
                 'email'              => $user->email,
             ], 403);
         }
+
+        $approvalStatus = $user->approval_status ?? 'approved';
+
+        if ($user->role === 'pet_owner' && $approvalStatus === 'rejected') {
+            try {
+                JWTAuth::invalidate($token);
+            } catch (\Throwable $e) {}
+
+            return response()->json([
+                'message'          => 'Your account registration was declined by the clinic staff. Please contact the clinic for assistance.',
+                'account_rejected' => true,
+            ], 403);
+        }
+
+        if ($user->role === 'pet_owner' && $approvalStatus === 'pending' && $request->boolean('enforce_staff_approval', false)) {
+            try {
+                JWTAuth::invalidate($token);
+            } catch (\Throwable $e) {}
+
+            return response()->json([
+                'message'                => 'Your account is pending verification and approval by Clinic Staff. Please wait for staff approval before signing in.',
+                'pending_staff_approval' => true,
+            ], 403);
+        }
+
+        $user->approval_status = $approvalStatus;
 
         return response()->json([
             'message' => 'Login successful',

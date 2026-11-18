@@ -382,6 +382,13 @@
                                 <span class="status-pill {{ $appt->status }}">
                                     {{ ucfirst($appt->status) }}
                                 </span>
+                                @if($appt->attendance_confirmed_at)
+                                    <div class="mt-1">
+                                        <span class="badge bg-success-subtle text-success" style="font-size: 10px;">
+                                            <i class="fas fa-user-check me-1"></i> Attendance Confirmed
+                                        </span>
+                                    </div>
+                                @endif
                                 @if($appt->status === 'cancelled' && !empty($appt->notes))
                                     @php
                                         $reasonText = null;

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Appointment;
+use App\Services\AppointmentReminderService;
 use App\Services\SMSService;
 use Illuminate\Console\Command;
 use Carbon\Carbon;
@@ -10,16 +11,19 @@ use Carbon\Carbon;
 class SendAppointmentReminders extends Command
 {
     protected $signature = 'appointments:send-reminders';
-    protected $description = 'Send SMS reminders to pet owners with appointments tomorrow';
+    protected $description = 'Send interactive in-app/push (24h & 3h) and SMS reminders for upcoming appointments';
 
     public function handle()
     {
+        $interactive = AppointmentReminderService::dispatchDueReminders();
+        $this->info("Interactive reminders dispatched — 24h: {$interactive['sent_24h']}, 3h: {$interactive['sent_3h']}");
+
         $targetDate = Carbon::tomorrow()->toDateString();
 
         $this->info("Looking for appointments on {$targetDate}...");
 
         $appointments = Appointment::with(['pet', 'user'])
-            ->where('appointment_date', $targetDate)
+            ->whereDate('appointment_date', $targetDate)
             ->whereIn('status', ['pending', 'approved'])
             ->get();
 

@@ -146,11 +146,13 @@
 @section('content')
 
 @php
+    $pendingCount = (int) ($stats['pending_approval'] ?? 0);
     $filterTabs = [
-        'all'    => ['All owners', 'fa-users'],
-        'new'    => ['New this month', 'fa-user-plus'],
-        'active' => ['Active this month', 'fa-calendar-check'],
-        'pets'   => ['Has pets', 'fa-paw'],
+        'all'     => ['All owners', 'fa-users'],
+        'pending' => ['Pending Approval' . ($pendingCount > 0 ? " ({$pendingCount})" : ''), 'fa-user-clock'],
+        'new'     => ['New this month', 'fa-user-plus'],
+        'active'  => ['Active this month', 'fa-calendar-check'],
+        'pets'    => ['Has pets', 'fa-paw'],
     ];
     $tabUrl = fn ($key) => route('admin.pet-owners.index', array_filter([
         'filter' => $key === 'all' ? null : $key,
@@ -314,7 +316,42 @@
                             </span>
                         @endforeach
                     @endif
+                    @php $approvalStatus = $owner->approval_status ?? 'approved'; @endphp
+                    @if($approvalStatus === 'pending')
+                        <span class="branch-chip" style="background: #F8E0A8; color: #554020;">
+                            <i class="fas fa-clock"></i>Pending Staff Approval
+                        </span>
+                    @elseif($approvalStatus === 'rejected')
+                        <span class="branch-chip" style="background: #FFDAD8; color: #690005;">
+                            <i class="fas fa-ban"></i>Rejected
+                        </span>
+                    @else
+                        <span class="branch-chip" style="background: #C8E8D0; color: #2A6038;">
+                            <i class="fas fa-circle-check"></i>Approved
+                        </span>
+                    @endif
                 </div>
+
+                @if($approvalStatus !== 'approved')
+                    <div class="d-flex gap-2 mt-2" onclick="event.stopPropagation();">
+                        <form method="POST" action="{{ route('admin.pet-owners.approve', $owner->id) }}" class="m-0 flex-grow-1">
+                            @csrf
+                            <button type="submit" class="btn btn-sm w-100 rounded-pill fw-bold"
+                                    style="background: #4A7C59; color: #FFFFFF; font-size: 11px; padding: 6px 10px;">
+                                <i class="fas fa-check me-1"></i> Approve Account
+                            </button>
+                        </form>
+                        @if($approvalStatus !== 'rejected')
+                            <form method="POST" action="{{ route('admin.pet-owners.reject', $owner->id) }}" class="m-0">
+                                @csrf
+                                <button type="submit" class="btn btn-sm rounded-pill fw-bold"
+                                        style="background: #FFDAD8; color: #690005; font-size: 11px; padding: 6px 12px;">
+                                    <i class="fas fa-times me-1"></i> Reject
+                                </button>
+                            </form>
+                        @endif
+                    </div>
+                @endif
 
                 <div class="last-booking d-flex align-items-center justify-content-between">
                     <span>

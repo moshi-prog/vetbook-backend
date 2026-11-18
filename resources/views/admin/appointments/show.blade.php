@@ -236,7 +236,17 @@
             </div>
             <div class="detail-row">
                 <div class="detail-label">Reason</div>
-                <div class="detail-value">{{ $appointment->reason ?? '—' }}</div>
+                <div class="detail-value">
+                    {{ $appointment->reason ?? '—' }}
+                    @if($appointment->duration_minutes)
+                        <span class="badge bg-light text-secondary border ms-1" style="font-size: 11px;">{{ $appointment->duration_minutes }} mins</span>
+                    @endif
+                    @if($appointment->attendance_confirmed_at)
+                        <span class="badge bg-success-subtle text-success ms-1" style="font-size: 11px;">
+                            <i class="fas fa-user-check me-1"></i> Attendance Confirmed
+                        </span>
+                    @endif
+                </div>
             </div>
             <div class="detail-row">
                 <div class="detail-label">Veterinarian</div>
@@ -336,6 +346,53 @@
                 <i class="fas fa-trash-alt"></i> Delete Appointment
             </button>
         </div>
+
+        @if($appointment->service_type === 'surgery' || stripos((string) $appointment->reason, 'surgery') !== false)
+            {{-- Surgery On-Call Coordination Card --}}
+            <div class="action-card mb-4">
+                <h3><i class="fas fa-stethoscope me-2" style="color: #4A7C59;"></i>Surgery On-Call Coordination</h3>
+                @php
+                    $surgeryStatusLabels = [
+                        'awaiting_slot'        => ['Awaiting Staff Slot', '#F8E0A8', '#554020'],
+                        'slot_proposed'        => ['Slot Proposed — Waiting for Pet Owner', '#D7E3FC', '#1D4ED8'],
+                        'confirmed'            => ['Confirmed by Pet Owner', '#C8E8D0', '#2A6038'],
+                        'reschedule_requested' => ['Pet Owner Requested Another Time', '#FFDAD8', '#690005'],
+                    ];
+                    $sKey = $appointment->surgery_status ?: 'awaiting_slot';
+                    [$sLabel, $sBg, $sFg] = $surgeryStatusLabels[$sKey] ?? ['Awaiting Staff Slot', '#F8E0A8', '#554020'];
+                @endphp
+                <div class="mb-3">
+                    <span class="badge rounded-pill px-3 py-2" style="background: {{ $sBg }}; color: {{ $sFg }}; font-size: 12px;">
+                        {{ $sLabel }}
+                    </span>
+                </div>
+                @if($appointment->proposed_date)
+                    <div class="small text-muted mb-3">
+                        Proposed: <strong>{{ \Carbon\Carbon::parse($appointment->proposed_date)->format('M d, Y') }}</strong>
+                        at <strong>{{ \App\Models\Appointment::format12Hour($appointment->proposed_time) }}</strong>
+                    </div>
+                @endif
+                <form method="POST" action="{{ route('admin.appointments.propose-surgery-slot', $appointment->id) }}">
+                    @csrf
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-muted mb-1">Proposed Surgery Date</label>
+                        <input type="date" name="proposed_date" class="form-control"
+                               min="{{ \Carbon\Carbon::tomorrow()->toDateString() }}"
+                               value="{{ $appointment->proposed_date ? \Carbon\Carbon::parse($appointment->proposed_date)->toDateString() : \Carbon\Carbon::tomorrow()->toDateString() }}"
+                               required style="border-radius: 12px;">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted mb-1">Proposed Surgery Time</label>
+                        <input type="time" name="proposed_time" class="form-control"
+                               value="{{ $appointment->proposed_time ?: '09:00' }}"
+                               required style="border-radius: 12px;">
+                    </div>
+                    <button type="submit" class="action-btn-lg primary mb-0">
+                        <i class="fas fa-paper-plane"></i> Send Available Surgery Slot to Pet Owner
+                    </button>
+                </form>
+            </div>
+        @endif
 
         {{-- Timeline Card --}}
         <div class="action-card">

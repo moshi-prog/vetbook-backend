@@ -4,13 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
+use App\Models\AppNotification;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class PetOwnerController extends Controller
 {
-    private const FILTERS = ['all', 'new', 'active', 'pets'];
+    private const FILTERS = ['all', 'pending', 'new', 'active', 'pets'];
     private const SORTS = ['newest', 'name', 'pets', 'appointments'];
 
     public function index(Request $request)
@@ -60,6 +61,7 @@ class PetOwnerController extends Controller
         $statsRow = \Illuminate\Support\Facades\DB::selectOne("
             SELECT 
                 COUNT(*) as total,
+                COUNT(CASE WHEN approval_status = 'pending' THEN 1 END) as pending_approval,
                 COUNT(CASE WHEN created_at BETWEEN ? AND ? THEN 1 END) as new_this_month,
                 COUNT(CASE WHEN EXISTS (
                     SELECT 1 FROM appointments a 
@@ -74,6 +76,7 @@ class PetOwnerController extends Controller
 
         $stats = [
             'total' => (int) ($statsRow->total ?? 0),
+            'pending_approval' => (int) ($statsRow->pending_approval ?? 0),
             'new_this_month' => (int) ($statsRow->new_this_month ?? 0),
             'active_this_month' => (int) ($statsRow->active_this_month ?? 0),
             'multi_pets' => (int) ($statsRow->multi_pets ?? 0),
@@ -95,6 +98,9 @@ class PetOwnerController extends Controller
         }
 
         switch ($filter) {
+            case 'pending':
+                $query->where('approval_status', 'pending');
+                break;
             case 'new':
                 $query->whereBetween('created_at', [$monthStart->copy()->startOfDay(), $monthEnd->copy()->endOfDay()]);
                 break;
@@ -179,6 +185,41 @@ class PetOwnerController extends Controller
     /**
      * Delete a pet owner account and all associated pets, appointments, and records.
      */
+    public function approve($id)
+    {
+        $owner = User::where('role', 'pet_owner')->findOrFail($id);
+        $owner->approval_status = 'approved';
+        $owner->approved_at = now();
+        $owner->approved_by = auth()->id();
+        if ($owner->email_verified_at === null) {
+            $owner->email_verified_at = now();
+        }
+        $owner->save();
+
+        try {
+            AppNotification::create([
+                'user_id' => $owner->id,
+                'title'   => 'Account Approved!',
+                'message' => 'Your VetBook pet owner account has been verified and approved by clinic staff.',
+                'type'    => 'account_approved',
+                'data'    => ['user_id' => $owner->id],
+            ]);
+        } catch (\Throwable $e) {
+            \Log::warning('Failed creating account approved notification: ' . $e->getMessage());
+        }
+
+        return back()->with('success', "Pet owner account for {$owner->name} has been approved.");
+    }
+
+    public function reject($id)
+    {
+        $owner = User::where('role', 'pet_owner')->findOrFail($id);
+        $owner->approval_status = 'rejected';
+        $owner->save();
+
+        return back()->with('success', "Pet owner account for {$owner->name} has been rejected.");
+    }
+
     public function destroy($id)
     {
         $owner = User::where('role', 'pet_owner')->findOrFail($id);

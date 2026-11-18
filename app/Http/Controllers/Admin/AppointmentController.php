@@ -192,6 +192,70 @@ class AppointmentController extends Controller
         return back()->with('success', 'Veterinarian assigned successfully.');
     }
 
+    /**
+     * Propose an available surgery date & time slot for an on-call surgery booking.
+     */
+    public function proposeSurgerySlot(Request $request, $id)
+    {
+        $this->ensureStaffBranch();
+
+        $user = auth()->user();
+        $appointment = Appointment::with(['pet', 'user'])->findOrFail($id);
+
+        if ($user->branch && $appointment->branch !== $user->branch) {
+            abort(403, 'Access denied. This appointment belongs to another branch.');
+        }
+
+        $validated = $request->validate([
+            'proposed_date' => 'required|date|after:today',
+            'proposed_time' => 'required|date_format:H:i',
+        ]);
+
+        $appointment->proposed_date = $validated['proposed_date'];
+        $appointment->proposed_time = $validated['proposed_time'];
+        $appointment->appointment_date = $validated['proposed_date'];
+        $appointment->appointment_time = $validated['proposed_time'];
+        $appointment->surgery_status = 'slot_proposed';
+        $appointment->save();
+
+        try {
+            $petName = $appointment->pet?->name ?? 'your pet';
+            $formattedDate = \Carbon\Carbon::parse($validated['proposed_date'])->format('M d, Y');
+            $formattedTime = Appointment::format12Hour($validated['proposed_time']);
+            $title = 'Surgery Schedule Proposed by Clinic';
+            $message = "Clinic staff proposed {$formattedDate} at {$formattedTime} for {$petName}'s surgery at {$appointment->branch}. Please open My Appointments to Proceed or Ask for Another Time.";
+
+            AppNotification::create([
+                'user_id' => $appointment->user_id,
+                'title'   => $title,
+                'message' => $message,
+                'type'    => 'surgery_slot_proposed',
+                'data'    => [
+                    'appointment_id' => $appointment->id,
+                    'pet_id'         => $appointment->pet_id,
+                    'proposed_date'  => $validated['proposed_date'],
+                    'proposed_time'  => $validated['proposed_time'],
+                ],
+            ]);
+
+            if ($appointment->user?->push_token) {
+                \App\Services\PushNotificationService::send(
+                    $appointment->user->push_token,
+                    $title,
+                    $message,
+                    [
+                        'appointment_id' => $appointment->id,
+                        'type'           => 'surgery_slot_proposed',
+                    ]
+                );
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Surgery slot proposal notification failed: ' . $e->getMessage());
+        }
+
+        return back()->with('success', 'Surgery schedule proposed and sent to the pet owner for confirmation.');
+    }
+
     // Approve a pending appointment
     public function approve($id)
     {

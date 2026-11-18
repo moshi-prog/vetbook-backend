@@ -66,6 +66,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/appointments/{id}',         [AppointmentController::class, 'show']);
     Route::put('/appointments/{id}/reschedule', [AppointmentController::class, 'reschedule']);
     Route::put('/appointments/{id}/cancel',  [AppointmentController::class, 'cancel']);
+    Route::post('/appointments/{id}/confirm-attendance', [AppointmentController::class, 'confirmAttendance']);
+    Route::post('/appointments/{id}/surgery-response',   [AppointmentController::class, 'respondToSurgerySlot']);
     Route::put('/appointments/{id}/status',  [AppointmentController::class, 'updateStatus']);
 
     // -----------------------------------------------------------------------

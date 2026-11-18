@@ -134,6 +134,14 @@
     <div style="flex: 1; min-width: 240px;">
         <h2>{{ $owner->name }}</h2>
         <span class="role-badge"><i class="fas fa-user"></i> Pet Owner</span>
+        @php $approvalStatus = $owner->approval_status ?? 'approved'; @endphp
+        @if($approvalStatus === 'pending')
+            <span class="role-badge ms-1" style="background: #F8E0A8; color: #554020;"><i class="fas fa-clock"></i> Pending Staff Approval</span>
+        @elseif($approvalStatus === 'rejected')
+            <span class="role-badge ms-1" style="background: #FFDAD8; color: #690005;"><i class="fas fa-ban"></i> Rejected</span>
+        @else
+            <span class="role-badge ms-1" style="background: #C8E8D0; color: #2A6038;"><i class="fas fa-circle-check"></i> Approved</span>
+        @endif
         <div class="mt-2">
             @if($owner->email)
                 <a href="mailto:{{ $owner->email }}" class="contact-link"><i class="fas fa-envelope"></i>{{ $owner->email }}</a>
@@ -259,6 +267,22 @@
         {{-- Actions --}}
         <div class="section-card">
             <h3><span><i class="fas fa-bolt me-2" style="color: #4A7C59;"></i>Actions</span></h3>
+            @if(($owner->approval_status ?? 'approved') !== 'approved')
+                <form method="POST" action="{{ route('admin.pet-owners.approve', $owner->id) }}" class="mb-2">
+                    @csrf
+                    <button type="submit" class="action-btn-lg primary w-100 border-0" style="background: #4A7C59; color: #FFFFFF;">
+                        <i class="fas fa-check"></i> Approve Account
+                    </button>
+                </form>
+                @if(($owner->approval_status ?? 'approved') !== 'rejected')
+                    <form method="POST" action="{{ route('admin.pet-owners.reject', $owner->id) }}" class="mb-2">
+                        @csrf
+                        <button type="submit" class="action-btn-lg danger w-100" style="background: #FFDAD8; color: #690005; border: 0;">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    </form>
+                @endif
+            @endif
             <a href="{{ $owner->email ? 'mailto:' . $owner->email : '#' }}"
                class="action-btn-lg primary {{ $owner->email ? '' : 'disabled' }}">
                 <i class="fas fa-envelope"></i> Email Owner

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AppNotification;
+use App\Services\AppointmentReminderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -17,6 +18,12 @@ class NotificationController extends Controller
     public function index(): JsonResponse
     {
         $user = JWTAuth::parseToken()->authenticate();
+
+        try {
+            AppointmentReminderService::dispatchDueReminders($user->id);
+        } catch (\Throwable $e) {
+            \Log::warning('Due appointment reminder check failed: ' . $e->getMessage());
+        }
 
         $notifications = AppNotification::where('user_id', $user->id)
             ->orderBy('created_at', 'desc')

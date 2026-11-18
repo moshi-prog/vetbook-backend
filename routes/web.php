@@ -44,6 +44,7 @@ Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {
     Route::post('/appointments/{id}/cancel', [AppointmentController::class, 'cancel'])->name('appointments.cancel');
     Route::post('/appointments/{id}/reschedule', [AppointmentController::class, 'reschedule'])->name('appointments.reschedule');
     Route::post('/appointments/{id}/assign-vet', [AppointmentController::class, 'assignVeterinarian'])->name('appointments.assign-vet');
+    Route::post('/appointments/{id}/propose-surgery-slot', [AppointmentController::class, 'proposeSurgerySlot'])->name('appointments.propose-surgery-slot');
 
     // Pets
     Route::get('/pets', [PetController::class, 'index'])->name('pets.index');
@@ -73,6 +74,8 @@ Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {
     Route::get('/pet-owners', [PetOwnerController::class, 'index'])->name('pet-owners.index');
     Route::get('/pet-owners/export', [PetOwnerController::class, 'export'])->name('pet-owners.export');
     Route::match(['post', 'delete'], '/pet-owners/bulk-delete', [PetOwnerController::class, 'bulkDestroy'])->name('pet-owners.bulk-delete');
+    Route::post('/pet-owners/{id}/approve', [PetOwnerController::class, 'approve'])->name('pet-owners.approve');
+    Route::post('/pet-owners/{id}/reject', [PetOwnerController::class, 'reject'])->name('pet-owners.reject');
     Route::get('/pet-owners/{id}', [PetOwnerController::class, 'show'])->name('pet-owners.show');
     Route::delete('/pet-owners/{id}', [PetOwnerController::class, 'destroy'])->name('pet-owners.destroy');
 
