@@ -227,7 +227,7 @@
             <div class="detail-row">
                 <div class="detail-label">Date</div>
                 <div class="detail-value">
-                    {{ \Carbon\Carbon::parse($appointment->appointment_date)->format('l, F j, Y') }}
+                    {{ $appointment->appointment_date ? \Carbon\Carbon::parse($appointment->appointment_date)->format('l, F j, Y') : 'Awaiting Staff Date' }}
                 </div>
             </div>
             <div class="detail-row">
@@ -353,13 +353,14 @@
                 <h3><i class="fas fa-stethoscope me-2" style="color: #4A7C59;"></i>Surgery On-Call Coordination</h3>
                 @php
                     $surgeryStatusLabels = [
-                        'awaiting_slot'        => ['Awaiting Staff Slot', '#F8E0A8', '#554020'],
-                        'slot_proposed'        => ['Slot Proposed — Waiting for Pet Owner', '#D7E3FC', '#1D4ED8'],
+                        'awaiting_slot'        => ['Awaiting Staff Date', '#F8E0A8', '#554020'],
+                        'slot_proposed'        => ['Date Proposed — Waiting for Pet Owner', '#D7E3FC', '#1D4ED8'],
                         'confirmed'            => ['Confirmed by Pet Owner', '#C8E8D0', '#2A6038'],
-                        'reschedule_requested' => ['Pet Owner Requested Another Time', '#FFDAD8', '#690005'],
+                        'reschedule_requested' => ['Pet Owner Requested Another Date', '#FFDAD8', '#690005'],
                     ];
                     $sKey = $appointment->surgery_status ?: 'awaiting_slot';
-                    [$sLabel, $sBg, $sFg] = $surgeryStatusLabels[$sKey] ?? ['Awaiting Staff Slot', '#F8E0A8', '#554020'];
+                    [$sLabel, $sBg, $sFg] = $surgeryStatusLabels[$sKey] ?? ['Awaiting Staff Date', '#F8E0A8', '#554020'];
+                    $dailyCap = \App\Models\Appointment::dailySurgeryLimitForBranch((string) $appointment->branch);
                 @endphp
                 <div class="mb-3">
                     <span class="badge rounded-pill px-3 py-2" style="background: {{ $sBg }}; color: {{ $sFg }}; font-size: 12px;">
@@ -368,27 +369,24 @@
                 </div>
                 @if($appointment->proposed_date)
                     <div class="small text-muted mb-3">
-                        Proposed: <strong>{{ \Carbon\Carbon::parse($appointment->proposed_date)->format('M d, Y') }}</strong>
-                        at <strong>{{ \App\Models\Appointment::format12Hour($appointment->proposed_time) }}</strong>
+                        Proposed Date: <strong>{{ \Carbon\Carbon::parse($appointment->proposed_date)->format('M d, Y') }}</strong>
                     </div>
                 @endif
                 <form method="POST" action="{{ route('admin.appointments.propose-surgery-slot', $appointment->id) }}">
                     @csrf
-                    <div class="mb-2">
+                    <div class="mb-3">
                         <label class="form-label small fw-bold text-muted mb-1">Proposed Surgery Date</label>
                         <input type="date" name="proposed_date" class="form-control"
                                min="{{ \Carbon\Carbon::tomorrow()->toDateString() }}"
                                value="{{ $appointment->proposed_date ? \Carbon\Carbon::parse($appointment->proposed_date)->toDateString() : \Carbon\Carbon::tomorrow()->toDateString() }}"
                                required style="border-radius: 12px;">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted mb-1">Proposed Surgery Time</label>
-                        <input type="time" name="proposed_time" class="form-control"
-                               value="{{ $appointment->proposed_time ?: '09:00' }}"
-                               required style="border-radius: 12px;">
+                        <div class="form-text mt-2" style="color: #6B6358;">
+                            <i class="fas fa-circle-info me-1 text-success"></i>
+                            {{ $dailyCap === 2 ? 'Batangas City Branch capacity: maximum 2 surgeries per day.' : 'Mabini Branch capacity: maximum 1 surgery per day.' }}
+                        </div>
                     </div>
                     <button type="submit" class="action-btn-lg primary mb-0">
-                        <i class="fas fa-paper-plane"></i> Send Available Surgery Slot to Pet Owner
+                        <i class="fas fa-paper-plane"></i> Send Surgery Date to Pet Owner
                     </button>
                 </form>
             </div>
@@ -476,7 +474,7 @@
                                class="form-control mt-2"
                                style="border-radius: 16px; border: 1px solid rgba(196,200,188,0.4);"
                                min="{{ date('Y-m-d') }}"
-                               value="{{ \Carbon\Carbon::parse($appointment->appointment_date)->format('Y-m-d') }}"
+                               value="{{ $appointment->appointment_date ? \Carbon\Carbon::parse($appointment->appointment_date)->format('Y-m-d') : now()->addDay()->format('Y-m-d') }}"
                                required>
                     </div>
                     <div class="mb-3">

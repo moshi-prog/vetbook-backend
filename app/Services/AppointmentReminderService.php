@@ -36,6 +36,7 @@ class AppointmentReminderService
         $tomorrowDateStr = $nowTz->copy()->addDay()->toDateString();
 
         $tomorrowQuery = Appointment::with(['pet', 'user'])
+            ->whereNotNull('appointment_date')
             ->whereDate('appointment_date', $tomorrowDateStr)
             ->whereIn('status', [Appointment::STATUS_PENDING, Appointment::STATUS_APPROVED])
             ->whereNull('reminder_24h_sent_at')
@@ -46,6 +47,9 @@ class AppointmentReminderService
         }
 
         foreach ($tomorrowQuery->get() as $appointment) {
+            if ($appointment->appointment_date === null) {
+                continue;
+            }
             $petName = $appointment->pet?->name ?? 'your pet';
             $formattedDate = Carbon::parse($appointment->appointment_date)->format('M d, Y');
             $formattedTime = strtoupper(trim((string) $appointment->appointment_time)) === 'ON_CALL'
@@ -164,6 +168,10 @@ class AppointmentReminderService
         $cancelled = 0;
 
         foreach ($query->get() as $appointment) {
+            if ($appointment->appointment_date === null) {
+                continue;
+            }
+
             $expiredBy12h = $appointment->reminder_24h_sent_at !== null
                 && $appointment->reminder_24h_sent_at->lte($twelveHoursAgo);
 
@@ -205,7 +213,9 @@ class AppointmentReminderService
 
             $petName = $appointment->pet?->name ?? 'your pet';
             $ownerName = $appointment->user?->name ?? 'Pet Owner';
-            $formattedDate = Carbon::parse($appointment->appointment_date)->format('M d, Y');
+            $formattedDate = $appointment->appointment_date
+                ? Carbon::parse($appointment->appointment_date)->format('M d, Y')
+                : 'Awaiting Date';
             $formattedTime = $isOnCall
                 ? 'On-Call'
                 : Appointment::format12Hour($appointment->appointment_time);

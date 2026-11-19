@@ -325,29 +325,27 @@ class CapstoneDefenseRevisionsTest extends TestCase
     public function test_on_call_surgery_workflow_staff_proposes_slot_and_pet_owner_can_proceed_or_request_another_time(): void
     {
         $mabiniStaff = $this->createStaff('Mabini Branch');
-        [$owner, $pets] = $this->createApprovedOwnerWithPets(1);
+        $batangasStaff = $this->createStaff('Batangas City Branch');
+        [$owner, $pets] = $this->createApprovedOwnerWithPets(3);
         $token = JWTAuth::fromUser($owner);
         $tomorrow = Carbon::tomorrow()->toDateString();
 
-        // Owner submits on-call surgery without picking regular slot, specifying FROM/TO preferred window
+        // Owner submits on-call surgery with NO date and NO time
         $bookRes = $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson('/api/appointments', [
                 'pet_id' => $pets[0]->id,
                 'branch' => 'Mabini Branch',
-                'appointment_date' => $tomorrow,
                 'service_type' => 'Surgery',
                 'reason' => 'Surgery',
-                'preferred_time_from' => '9:00 AM',
-                'preferred_time_to' => '4:00 PM',
                 'notes' => 'Spay procedure',
             ]);
 
         $bookRes->assertStatus(201);
         $apptId = $bookRes->json('appointment.id');
+        $this->assertNull($bookRes->json('appointment.appointment_date'));
         $this->assertSame('ON_CALL', $bookRes->json('appointment.appointment_time'));
         $this->assertSame('awaiting_slot', $bookRes->json('appointment.surgery_status'));
-        $this->assertSame('Preferred Window: 9:00 AM - 4:00 PM', $bookRes->json('appointment.proposed_time'));
-        $this->assertStringContainsString('9:00 AM to 4:00 PM', $bookRes->json('appointment.notes'));
+        $this->assertSame('Surgery', $bookRes->json('appointment.reason'));
 
         $this->assertDatabaseHas('app_notifications', [
             'user_id' => $mabiniStaff->id,
@@ -369,56 +367,53 @@ class CapstoneDefenseRevisionsTest extends TestCase
         $this->actingAs($mabiniStaff)->get('/admin/appointments?tab=regular')
             ->assertStatus(200)
             ->assertSee('Annual Booster Shot')
-            ->assertDontSee('Preferred Window: 9:00 AM - 4:00 PM');
+            ->assertDontSee('Assign Surgery Date');
 
         $this->actingAs($mabiniStaff)->get('/admin/appointments?tab=surgery')
             ->assertStatus(200)
-            ->assertSee('Preferred Window: 9:00 AM - 4:00 PM')
-            ->assertSee('Set Surgery Slot')
+            ->assertSee('Awaiting Staff Date')
+            ->assertSee('Assign Surgery Date')
             ->assertDontSee('Annual Booster Shot');
 
-        // Staff views appointment and sees coordination card
+        // Staff views appointment and sees coordination card (date-only)
         $this->actingAs($mabiniStaff)->get("/admin/appointments/{$apptId}")
             ->assertStatus(200)
             ->assertSee('Surgery On-Call Coordination')
-            ->assertSee('Awaiting Staff Slot');
+            ->assertSee('Awaiting Staff Date')
+            ->assertDontSee('name="proposed_time"', false);
 
-        // Staff proposes surgery slot
+        // Staff assigns ONLY proposed_date (no proposed_time)
         $proposedDate = Carbon::tomorrow()->addDays(2)->toDateString();
         $this->actingAs($mabiniStaff)->post("/admin/appointments/{$apptId}/propose-surgery-slot", [
             'proposed_date' => $proposedDate,
-            'proposed_time' => '10:30',
         ])->assertRedirect();
 
         $appt = Appointment::findOrFail($apptId);
         $this->assertSame('slot_proposed', $appt->surgery_status);
-        $this->assertSame('10:30', $appt->proposed_time);
+        $this->assertNull($appt->proposed_time);
+        $this->assertSame($proposedDate, Carbon::parse($appt->appointment_date)->toDateString());
         $this->assertDatabaseHas('app_notifications', [
             'user_id' => $owner->id,
             'type' => 'surgery_slot_proposed',
         ]);
 
-        // Owner asks for another time with new preferred date & FROM/TO window
-        $altDate = Carbon::tomorrow()->addDays(3)->toDateString();
+        // Owner asks for another date -> clears appointment_date/proposed_date so slot is freed
         $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson("/api/appointments/{$apptId}/surgery-response", [
                 'action' => 'request_another',
-                'preferred_date' => $altDate,
-                'preferred_time_from' => '1:00 PM',
-                'preferred_time_to' => '5:00 PM',
-                'preferred_notes' => 'Afternoon works better',
+                'preferred_notes' => 'Not available that week',
             ])->assertStatus(200);
 
         $appt->refresh();
         $this->assertSame('reschedule_requested', $appt->surgery_status);
-        $this->assertSame('1:00 PM - 5:00 PM', $appt->proposed_time);
-        $this->assertSame($altDate, Carbon::parse($appt->appointment_date)->toDateString());
-        $this->assertStringContainsString('Afternoon works better', $appt->notes);
+        $this->assertNull($appt->appointment_date);
+        $this->assertNull($appt->proposed_date);
+        $this->assertStringContainsString('[Owner Requested Another Surgery Date]', (string) $appt->notes);
+        $this->assertStringContainsString('Not available that week', (string) $appt->notes);
 
-        // Staff proposes afternoon slot and owner proceeds/confirms
+        // Staff assigns a new date and owner proceeds/confirms
         $this->actingAs($mabiniStaff)->post("/admin/appointments/{$apptId}/propose-surgery-slot", [
             'proposed_date' => $proposedDate,
-            'proposed_time' => '14:00',
         ])->assertRedirect();
 
         $this->withHeader('Authorization', "Bearer {$token}")
@@ -430,6 +425,56 @@ class CapstoneDefenseRevisionsTest extends TestCase
         $this->assertSame('confirmed', $appt->surgery_status);
         $this->assertSame('approved', $appt->status);
         $this->assertNotNull($appt->attendance_confirmed_at);
+
+        // Mabini Branch daily surgery cap = 1 per day: assigning 2nd surgery on same date is blocked
+        $mabiniAppt2Res = $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets[1]->id,
+                'branch' => 'Mabini Branch',
+                'service_type' => 'Surgery',
+                'reason' => 'Surgery',
+            ])->assertStatus(201);
+        $mabiniAppt2Id = $mabiniAppt2Res->json('appointment.id');
+
+        $mabiniCapRes = $this->actingAs($mabiniStaff)->post("/admin/appointments/{$mabiniAppt2Id}/propose-surgery-slot", [
+            'proposed_date' => $proposedDate,
+        ]);
+        $mabiniCapRes->assertRedirect();
+        $mabiniCapRes->assertSessionHas('error', fn ($msg) => str_contains((string) $msg, 'daily surgery limit (1 surgery per day)'));
+        $this->assertNull(Appointment::findOrFail($mabiniAppt2Id)->appointment_date);
+
+        // Assigning another date (+1 day) in Mabini succeeds
+        $this->actingAs($mabiniStaff)->post("/admin/appointments/{$mabiniAppt2Id}/propose-surgery-slot", [
+            'proposed_date' => Carbon::parse($proposedDate)->addDay()->toDateString(),
+        ])->assertSessionHas('success');
+        $this->assertSame('slot_proposed', Appointment::findOrFail($mabiniAppt2Id)->surgery_status);
+
+        // Batangas City Branch daily surgery cap = 2 per day: 2 allowed on same date, 3rd blocked
+        $batIds = [];
+        foreach ([0, 1, 2] as $idx) {
+            $bRes = $this->withHeader('Authorization', "Bearer {$token}")
+                ->postJson('/api/appointments', [
+                    'pet_id' => $pets[$idx]->id,
+                    'branch' => 'Batangas City Branch',
+                    'service_type' => 'Surgery',
+                    'reason' => 'Surgery',
+                ])->assertStatus(201);
+            $batIds[] = $bRes->json('appointment.id');
+        }
+
+        $this->actingAs($batangasStaff)->post("/admin/appointments/{$batIds[0]}/propose-surgery-slot", [
+            'proposed_date' => $proposedDate,
+        ])->assertSessionHas('success');
+        $this->actingAs($batangasStaff)->post("/admin/appointments/{$batIds[1]}/propose-surgery-slot", [
+            'proposed_date' => $proposedDate,
+        ])->assertSessionHas('success');
+
+        $batCapRes = $this->actingAs($batangasStaff)->post("/admin/appointments/{$batIds[2]}/propose-surgery-slot", [
+            'proposed_date' => $proposedDate,
+        ]);
+        $batCapRes->assertRedirect();
+        $batCapRes->assertSessionHas('error', fn ($msg) => str_contains((string) $msg, 'daily surgery limit (2 surgeries per day)'));
+        $this->assertNull(Appointment::findOrFail($batIds[2])->appointment_date);
     }
 
     public function test_simultaneous_multi_pet_booking_creates_appointments_for_all_selected_pets(): void

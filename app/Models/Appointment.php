@@ -85,6 +85,14 @@ class Appointment extends Model
         return 1;
     }
 
+    /**
+     * Maximum daily surgeries permitted per clinic branch.
+     */
+    public static function dailySurgeryLimitForBranch(string $branch): int
+    {
+        return stripos($branch, 'batangas') !== false ? 2 : 1;
+    }
+
     // Status Constants
     const STATUS_PENDING = 'pending';
     const STATUS_APPROVED = 'approved';

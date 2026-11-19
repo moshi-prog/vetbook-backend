@@ -396,29 +396,24 @@
                             </td>
                             <td>
                                 <div style="font-weight: 600;">
-                                    {{ \Carbon\Carbon::parse($appt->appointment_date)->format('M d, Y') }}
+                                    {{ $appt->appointment_date ? \Carbon\Carbon::parse($appt->appointment_date)->format('M d, Y') : 'Awaiting Staff Date' }}
                                 </div>
                                 <div style="font-size: 11px; color: #6B6358;">
                                     {{ $appt->formatted_time }}
                                 </div>
-                                @if($activeTab === 'surgery' && $appt->proposed_time)
-                                    <div style="font-size: 11px; color: #4A7C59; font-weight: 600;">
-                                        {{ $appt->proposed_time }}
-                                    </div>
-                                @endif
                             </td>
                             <td>
                                 <span style="font-size: 12px;">{{ $appt->reason ?? '—' }}</span>
                                 @if($activeTab === 'surgery')
                                     @php
                                         $sMap = [
-                                            'awaiting_slot'        => ['Awaiting Staff Slot', '#F8E0A8', '#554020'],
-                                            'slot_proposed'        => ['Slot Proposed', '#D7E3FC', '#1D4ED8'],
-                                            'reschedule_requested' => ['Owner Requested Another Time', '#FFDAD8', '#690005'],
+                                            'awaiting_slot'        => ['Awaiting Staff Date', '#F8E0A8', '#554020'],
+                                            'slot_proposed'        => ['Date Proposed', '#D7E3FC', '#1D4ED8'],
+                                            'reschedule_requested' => ['Owner Requested Another Date', '#FFDAD8', '#690005'],
                                             'confirmed'            => ['Confirmed', '#C8E8D0', '#2A6038'],
                                         ];
                                         $sVal = $appt->surgery_status ?: 'awaiting_slot';
-                                        [$sLbl, $sBgCol, $sFgCol] = $sMap[$sVal] ?? ['Awaiting Staff Slot', '#F8E0A8', '#554020'];
+                                        [$sLbl, $sBgCol, $sFgCol] = $sMap[$sVal] ?? ['Awaiting Staff Date', '#F8E0A8', '#554020'];
                                     @endphp
                                     <div class="mt-1">
                                         <span class="badge rounded-pill" style="background: {{ $sBgCol }}; color: {{ $sFgCol }}; font-size: 10px;">
@@ -460,7 +455,7 @@
                                         <button type="button" class="btn btn-sm rounded-pill px-2 py-1 text-white"
                                                 style="background: #4A7C59; font-size: 11px; font-weight: 700;"
                                                 data-bs-toggle="modal" data-bs-target="#setSurgerySlotModal-{{ $appt->id }}">
-                                            <i class="fas fa-calendar-plus me-1"></i> Set Surgery Slot
+                                            <i class="fas fa-calendar-plus me-1"></i> Assign Surgery Date
                                         </button>
                                     @endif
                                     <a href="{{ route('admin.appointments.show', $appt->id) }}"
@@ -474,7 +469,13 @@
                                 </div>
 
                                 @if($activeTab === 'surgery' && !in_array($appt->status, ['completed', 'cancelled']))
-                                    <!-- Propose Surgery Slot Modal -->
+                                    @php
+                                        $dailyCap = \App\Models\Appointment::dailySurgeryLimitForBranch((string) $appt->branch);
+                                        $defaultDateVal = $appt->proposed_date
+                                            ? \Carbon\Carbon::parse($appt->proposed_date)->toDateString()
+                                            : ($appt->appointment_date ? \Carbon\Carbon::parse($appt->appointment_date)->toDateString() : \Carbon\Carbon::tomorrow()->toDateString());
+                                    @endphp
+                                    <!-- Assign Surgery Date Modal -->
                                     <div class="modal fade text-start" id="setSurgerySlotModal-{{ $appt->id }}" tabindex="-1" aria-hidden="true">
                                         <div class="modal-dialog modal-dialog-centered">
                                             <div class="modal-content" style="border-radius: 24px; border: none;">
@@ -482,37 +483,30 @@
                                                     @csrf
                                                     <div class="modal-header" style="border-bottom: 1px solid #EAE6DE;">
                                                         <h5 class="modal-title" style="font-family: 'Literata', serif; font-weight: 700;">
-                                                            <i class="fas fa-heart-pulse me-2 text-success"></i> Set Surgery Slot
+                                                            <i class="fas fa-heart-pulse me-2 text-success"></i> Assign Surgery Date
                                                         </h5>
                                                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                     </div>
                                                     <div class="modal-body" style="font-family: 'Nunito Sans', sans-serif;">
-                                                        <p class="small text-muted mb-2">
+                                                        <p class="small text-muted mb-3">
                                                             Pet: <strong>{{ $appt->pet?->name ?? 'Pet' }}</strong> &bull; Owner: <strong>{{ $appt->user?->name ?? 'Client' }}</strong>
                                                         </p>
-                                                        @if($appt->proposed_time)
-                                                            <div class="p-2 rounded mb-3 small" style="background: #F5F1EA; color: #4A7C59; font-weight: 600;">
-                                                                Owner Preference: {{ \Carbon\Carbon::parse($appt->proposed_date ?? $appt->appointment_date)->format('M d, Y') }} &bull; {{ $appt->proposed_time }}
-                                                            </div>
-                                                        @endif
-                                                        <div class="mb-3">
+                                                        <div>
                                                             <label class="form-label small fw-bold text-muted">Proposed Surgery Date</label>
                                                             <input type="date" name="proposed_date" class="form-control"
                                                                    min="{{ \Carbon\Carbon::tomorrow()->toDateString() }}"
-                                                                   value="{{ $appt->proposed_date ? \Carbon\Carbon::parse($appt->proposed_date)->toDateString() : \Carbon\Carbon::parse($appt->appointment_date)->toDateString() }}"
+                                                                   value="{{ $defaultDateVal }}"
                                                                    required style="border-radius: 12px;">
-                                                        </div>
-                                                        <div>
-                                                            <label class="form-label small fw-bold text-muted">Proposed Surgery Time</label>
-                                                            <input type="time" name="proposed_time" class="form-control"
-                                                                   value="{{ preg_match('/^\d{2}:\d{2}$/', (string) $appt->proposed_time) ? $appt->proposed_time : '09:00' }}"
-                                                                   required style="border-radius: 12px;">
+                                                            <div class="form-text mt-2" style="color: #6B6358;">
+                                                                <i class="fas fa-circle-info me-1 text-success"></i>
+                                                                {{ $dailyCap === 2 ? 'Batangas City Branch capacity: maximum 2 surgeries per day.' : 'Mabini Branch capacity: maximum 1 surgery per day.' }}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div class="modal-footer" style="border-top: 1px solid #EAE6DE;">
                                                         <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
                                                         <button type="submit" class="btn text-white rounded-pill px-4" style="background: #4A7C59;">
-                                                            <i class="fas fa-paper-plane me-1"></i> Send Slot to Pet Owner
+                                                            <i class="fas fa-paper-plane me-1"></i> Send Surgery Date to Pet Owner
                                                         </button>
                                                     </div>
                                                 </form>

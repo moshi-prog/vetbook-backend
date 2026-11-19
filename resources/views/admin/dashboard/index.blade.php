@@ -418,7 +418,7 @@
                                     {{ $appt->pet->name ?? 'Unknown' }}
                                 </td>
                                 <td>
-                                    {{ \Carbon\Carbon::parse($appt->appointment_date)->format('M d, Y') }}
+                                    {{ $appt->appointment_date ? \Carbon\Carbon::parse($appt->appointment_date)->format('M d, Y') : 'Awaiting Staff Date' }}
                                     <div style="font-size: 11px; color: #6B6358;">
                                         {{ $appt->formatted_time }}
                                     </div>

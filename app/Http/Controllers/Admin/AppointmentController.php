@@ -239,7 +239,7 @@ class AppointmentController extends Controller
     }
 
     /**
-     * Propose an available surgery date & time slot for an on-call surgery booking.
+     * Propose an available surgery date for an on-call surgery booking (enforcing daily branch surgery caps).
      */
     public function proposeSurgerySlot(Request $request, $id)
     {
@@ -254,22 +254,37 @@ class AppointmentController extends Controller
 
         $validated = $request->validate([
             'proposed_date' => 'required|date|after:today',
-            'proposed_time' => 'required|date_format:H:i',
         ]);
 
+        $maxPerDay = Appointment::dailySurgeryLimitForBranch((string) $appointment->branch);
+        $bookedOnDate = Appointment::where('id', '!=', $appointment->id)
+            ->where('branch', $appointment->branch)
+            ->whereIn('status', [Appointment::STATUS_PENDING, Appointment::STATUS_APPROVED])
+            ->where(function ($q) {
+                $q->where('service_type', 'surgery')
+                  ->orWhereRaw("LOWER(COALESCE(reason, '')) LIKE '%surgery%'");
+            })
+            ->whereDate('appointment_date', $validated['proposed_date'])
+            ->count();
+
+        if ($bookedOnDate >= $maxPerDay) {
+            $formattedDate = \Carbon\Carbon::parse($validated['proposed_date'])->format('M d, Y');
+            $unit = $maxPerDay === 1 ? 'surgery' : 'surgeries';
+            return back()->with('error', "{$appointment->branch} already reached its daily surgery limit ({$maxPerDay} {$unit} per day) on {$formattedDate}. Please choose another date.");
+        }
+
         $appointment->proposed_date = $validated['proposed_date'];
-        $appointment->proposed_time = $validated['proposed_time'];
+        $appointment->proposed_time = null;
         $appointment->appointment_date = $validated['proposed_date'];
-        $appointment->appointment_time = $validated['proposed_time'];
+        $appointment->appointment_time = 'ON_CALL';
         $appointment->surgery_status = 'slot_proposed';
         $appointment->save();
 
         try {
             $petName = $appointment->pet?->name ?? 'your pet';
             $formattedDate = \Carbon\Carbon::parse($validated['proposed_date'])->format('M d, Y');
-            $formattedTime = Appointment::format12Hour($validated['proposed_time']);
-            $title = 'Surgery Schedule Proposed by Clinic';
-            $message = "Clinic staff proposed {$formattedDate} at {$formattedTime} for {$petName}'s surgery at {$appointment->branch}. Please open My Appointments to Proceed or Ask for Another Time.";
+            $title = 'Surgery Date Proposed by Clinic';
+            $message = "Clinic staff assigned {$formattedDate} for {$petName}'s surgery at {$appointment->branch}. Please open My Appointments to Proceed or Ask for Another Date.";
 
             AppNotification::create([
                 'user_id' => $appointment->user_id,
@@ -280,7 +295,6 @@ class AppointmentController extends Controller
                     'appointment_id' => $appointment->id,
                     'pet_id'         => $appointment->pet_id,
                     'proposed_date'  => $validated['proposed_date'],
-                    'proposed_time'  => $validated['proposed_time'],
                 ],
             ]);
 
@@ -296,10 +310,10 @@ class AppointmentController extends Controller
                 );
             }
         } catch (\Throwable $e) {
-            \Log::warning('Surgery slot proposal notification failed: ' . $e->getMessage());
+            \Log::warning('Surgery date proposal notification failed: ' . $e->getMessage());
         }
 
-        return back()->with('success', 'Surgery schedule proposed and sent to the pet owner for confirmation.');
+        return back()->with('success', 'Surgery date assigned and sent to the pet owner for confirmation.');
     }
 
     // Approve a pending appointment
@@ -325,7 +339,9 @@ class AppointmentController extends Controller
         try {
             $appointment->load(['user', 'pet']);
             $petName = $appointment->pet?->name ?? 'your pet';
-            $formattedDate = \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y');
+            $formattedDate = $appointment->appointment_date
+                ? \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y')
+                : 'Awaiting Date';
             $formattedTime = Appointment::format12Hour($appointment->appointment_time);
             AppNotification::create([
                 'user_id' => $appointment->user_id,
@@ -465,7 +481,9 @@ class AppointmentController extends Controller
         try {
             $appointment->load(['user', 'pet']);
             $petName = $appointment->pet?->name ?? 'your pet';
-            $formattedDate = \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y');
+            $formattedDate = $appointment->appointment_date
+                ? \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y')
+                : 'Awaiting Date';
             $reasonNote = $request->filled('cancel_reason') ? " Reason: {$request->cancel_reason}." : '';
             AppNotification::create([
                 'user_id' => $appointment->user_id,

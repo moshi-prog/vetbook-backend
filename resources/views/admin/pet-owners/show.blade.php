@@ -251,7 +251,7 @@
                                 <tr @if(auth()->user()->branch !== null) onclick="window.location='{{ route('admin.appointments.show', $a->id) }}'" @endif>
                                     <td style="font-weight: 600;">{{ $a->pet->name ?? 'Unknown' }}</td>
                                     <td>{{ $a->branch }}</td>
-                                    <td>{{ \Carbon\Carbon::parse($a->appointment_date)->format('M d, Y') }}</td>
+                                    <td>{{ $a->appointment_date ? \Carbon\Carbon::parse($a->appointment_date)->format('M d, Y') : 'Awaiting Staff Date' }}</td>
                                     <td>{{ $a->formatted_time }}</td>
                                     <td><span class="status-pill {{ $a->status }}">{{ ucfirst($a->status) }}</span></td>
                                 </tr>
