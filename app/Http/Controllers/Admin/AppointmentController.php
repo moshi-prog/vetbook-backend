@@ -546,16 +546,18 @@ class AppointmentController extends Controller
             return back()->withInput()->with('error', 'The clinic is closed for lunch break between 12:00 PM and 1:00 PM. Please choose another time slot.');
         }
 
-        // Conflict check
-        $conflict = Appointment::where('id', '!=', $appointment->id)
-            ->where('branch', $appointment->branch)
-            ->whereDate('appointment_date', $validated['appointment_date'])
-            ->where('appointment_time', $validated['appointment_time'])
-            ->whereIn('status', ['pending', 'approved'])
-            ->exists();
+        // Service-pool-aware conflict check excluding current appointment
+        $serviceType = Appointment::resolveServiceType($appointment->reason, $appointment->service_type);
+        $capacity = Appointment::branchCapacityForService((string) $appointment->branch, $serviceType);
+        $occupancy = \App\Services\BranchCapacityService::analyzeDayOccupancy(
+            (string) $appointment->branch,
+            \Carbon\Carbon::parse($validated['appointment_date'])->toDateString(),
+            $appointment->id
+        );
+        $startMins = \App\Services\BranchCapacityService::timeToMinutes($validated['appointment_time']);
 
-        if ($conflict) {
-            return back()->with('error', 'That time slot is already booked for this branch.');
+        if ($startMins === null || !\App\Services\BranchCapacityService::slotHasCapacity($startMins, $serviceType, $capacity, $occupancy)) {
+            return back()->with('error', 'That time slot is already booked or unavailable for this branch.');
         }
 
         $oldDate = !empty($appointment->appointment_date)

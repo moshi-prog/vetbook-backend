@@ -655,4 +655,170 @@ class CapstoneDefenseRevisionsTest extends TestCase
         $this->actingAs($mabiniStaff)->get('/admin/appointments')->assertStatus(200);
         $this->assertSame(Appointment::STATUS_CANCELLED, $missedStaffPortalAppt->fresh()->status);
     }
+
+    public function test_grooming_and_vet_pools_are_independent_and_surgery_uses_vet_pool_across_both_branches(): void
+    {
+        $mabiniStaff = $this->createStaff('Mabini Branch');
+        $batangasStaff = $this->createStaff('Batangas City Branch');
+
+        [$owner1, $pets1] = $this->createApprovedOwnerWithPets(2);
+        [$owner2, $pets2] = $this->createApprovedOwnerWithPets(2);
+        [$owner3, $pets3] = $this->createApprovedOwnerWithPets(2);
+        [$owner4, $pets4] = $this->createApprovedOwnerWithPets(2);
+
+        $token1 = JWTAuth::fromUser($owner1);
+        $token2 = JWTAuth::fromUser($owner2);
+        $token3 = JWTAuth::fromUser($owner3);
+        $token4 = JWTAuth::fromUser($owner4);
+
+        $date1 = Carbon::tomorrow()->addDays(2)->toDateString();
+        $date2 = Carbon::tomorrow()->addDays(4)->toDateString();
+        $batDate = Carbon::tomorrow()->addDays(6)->toDateString();
+
+        // ── Mabini Branch (1 Groomer, 1 Vet) ──────────────────────────────────
+        // Book Grooming at 09:00 -> occupies Groomer pool 09:00..10:30
+        $this->withHeader('Authorization', "Bearer {$token1}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets1[0]->id,
+                'branch' => 'Mabini Branch',
+                'appointment_date' => $date1,
+                'appointment_time' => '09:00',
+                'service_type' => 'Grooming',
+                'reason' => 'Grooming',
+            ])->assertStatus(201);
+
+        $groomRes = $this->getJson("/api/appointments/booked-slots?branch=Mabini+Branch&date={$date1}&service=Grooming")
+            ->assertStatus(200)
+            ->assertJsonPath('pool', 'groomer')
+            ->assertJsonPath('capacity', 1);
+        foreach (['09:00', '09:30', '10:00', '10:30'] as $s) {
+            $this->assertContains($s, $groomRes->json('booked_slots'));
+        }
+
+        // Vaccination slot check on SAME date & time MUST NOT be blocked by Grooming
+        $vaxSlots = $this->getJson("/api/appointments/booked-slots?branch=Mabini+Branch&date={$date1}&service=Vaccination")
+            ->assertStatus(200)
+            ->assertJsonPath('pool', 'vet')
+            ->assertJsonPath('capacity', 1);
+        foreach (['09:00', '09:30', '10:00', '10:30'] as $s) {
+            $this->assertNotContains($s, $vaxSlots->json('booked_slots'));
+        }
+
+        // Booking Vaccination at 09:00 succeeds while Grooming is at 09:00
+        $this->withHeader('Authorization', "Bearer {$token2}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets2[0]->id,
+                'branch' => 'Mabini Branch',
+                'appointment_date' => $date1,
+                'appointment_time' => '09:00',
+                'service_type' => 'Vaccination',
+                'reason' => 'Vaccination',
+            ])->assertStatus(201);
+
+        // Diagnostic / Checkup at 09:00 fails with 409 because 1 Vet is occupied by Vaccination
+        $this->withHeader('Authorization', "Bearer {$token3}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets3[0]->id,
+                'branch' => 'Mabini Branch',
+                'appointment_date' => $date1,
+                'appointment_time' => '09:00',
+                'service_type' => 'Diagnostic / Checkup',
+                'reason' => 'Diagnostic / Checkup',
+            ])->assertStatus(409);
+
+        // Assigning an ON_CALL Surgery on $date2 in Mabini occupies the 1 Vet for Vet services, NOT Grooming
+        $mabiniSurgRes = $this->withHeader('Authorization', "Bearer {$token1}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets1[1]->id,
+                'branch' => 'Mabini Branch',
+                'service_type' => 'Surgery',
+                'reason' => 'Surgery',
+            ])->assertStatus(201);
+        $this->actingAs($mabiniStaff)->post('/admin/appointments/' . $mabiniSurgRes->json('appointment.id') . '/propose-surgery-slot', [
+            'proposed_date' => $date2,
+        ])->assertSessionHas('success');
+
+        $vaxOnSurgDay = $this->getJson("/api/appointments/booked-slots?branch=Mabini+Branch&date={$date2}&service=Vaccination")
+            ->assertStatus(200);
+        $this->assertContains('09:00', $vaxOnSurgDay->json('booked_slots'));
+
+        $this->withHeader('Authorization', "Bearer {$token2}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets2[1]->id,
+                'branch' => 'Mabini Branch',
+                'appointment_date' => $date2,
+                'appointment_time' => '09:00',
+                'service_type' => 'Vaccination',
+                'reason' => 'Vaccination',
+            ])->assertStatus(409);
+
+        // Grooming on $date2 STILL succeeds even with Surgery assigned to that day
+        $this->withHeader('Authorization', "Bearer {$token3}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets3[1]->id,
+                'branch' => 'Mabini Branch',
+                'appointment_date' => $date2,
+                'appointment_time' => '09:00',
+                'service_type' => 'Grooming',
+                'reason' => 'Grooming',
+            ])->assertStatus(201);
+
+        // ── Batangas City Branch (3 Groomers, 2 Vets) ─────────────────────────
+        // Assign 1 ON_CALL Surgery on $batDate -> uses 1 of 2 Vets
+        $batSurgRes = $this->withHeader('Authorization', "Bearer {$token1}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets1[0]->id,
+                'branch' => 'Batangas City Branch',
+                'service_type' => 'Surgery',
+                'reason' => 'Surgery',
+            ])->assertStatus(201);
+        $this->actingAs($batangasStaff)->post('/admin/appointments/' . $batSurgRes->json('appointment.id') . '/propose-surgery-slot', [
+            'proposed_date' => $batDate,
+        ])->assertSessionHas('success');
+
+        // 1 Vaccination at 10:00 succeeds (uses 2nd Vet); 2nd Vaccination at 10:00 fails (409)
+        $this->withHeader('Authorization', "Bearer {$token2}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets2[0]->id,
+                'branch' => 'Batangas City Branch',
+                'appointment_date' => $batDate,
+                'appointment_time' => '10:00',
+                'service_type' => 'Vaccination',
+                'reason' => 'Vaccination',
+            ])->assertStatus(201);
+
+        $this->withHeader('Authorization', "Bearer {$token3}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets3[0]->id,
+                'branch' => 'Batangas City Branch',
+                'appointment_date' => $batDate,
+                'appointment_time' => '10:00',
+                'service_type' => 'Vaccination',
+                'reason' => 'Vaccination',
+            ])->assertStatus(409);
+
+        // All 3 Groomers at 10:00 on $batDate STILL succeed independently; 4th fails (409)
+        foreach ([$token1, $token2, $token3] as $idx => $tok) {
+            $pId = [$pets1[1]->id, $pets2[1]->id, $pets3[1]->id][$idx];
+            $this->withHeader('Authorization', "Bearer {$tok}")
+                ->postJson('/api/appointments', [
+                    'pet_id' => $pId,
+                    'branch' => 'Batangas City Branch',
+                    'appointment_date' => $batDate,
+                    'appointment_time' => '10:00',
+                    'service_type' => 'Grooming',
+                    'reason' => 'Grooming',
+                ])->assertStatus(201);
+        }
+
+        $this->withHeader('Authorization', "Bearer {$token4}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets4[0]->id,
+                'branch' => 'Batangas City Branch',
+                'appointment_date' => $batDate,
+                'appointment_time' => '10:00',
+                'service_type' => 'Grooming',
+                'reason' => 'Grooming',
+            ])->assertStatus(409);
+    }
 }

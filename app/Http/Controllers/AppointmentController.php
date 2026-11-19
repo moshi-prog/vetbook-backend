@@ -6,6 +6,7 @@ use App\Models\Appointment;
 use App\Models\AppNotification;
 use App\Models\Pet;
 use App\Models\User;
+use App\Services\BranchCapacityService;
 use App\Services\PushNotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -73,234 +74,8 @@ class AppointmentController extends Controller
         ]);
     }
 
-    private const GROOMING_CUTOFF_MINUTES = 900; // 15:00 (3:00 PM)
-    private const DAY_START_MINUTES = 450;       // 07:30
-    private const DAY_END_MINUTES = 1050;        // 17:30
-    private const LUNCH_START_MINUTES = 720;     // 12:00
-    private const LUNCH_END_MINUTES = 780;       // 13:00
-
     /**
-     * Convert HH:MM / HH:MM:SS / 12-hour time strings into minutes from midnight.
-     */
-    private function timeToMinutes(?string $time): ?int
-    {
-        if (empty($time)) {
-            return null;
-        }
-
-        $trimmed = trim($time);
-        if (strtoupper($trimmed) === 'ON_CALL') {
-            return null;
-        }
-
-        try {
-            if (stripos($trimmed, 'am') !== false || stripos($trimmed, 'pm') !== false) {
-                $parsed = Carbon::parse($trimmed);
-                return ($parsed->hour * 60) + $parsed->minute;
-            }
-            if (preg_match('/^(\d{1,2}):(\d{2})/', $trimmed, $m)) {
-                return ((int) $m[1] * 60) + (int) $m[2];
-            }
-            $parsed = Carbon::parse($trimmed);
-            return ($parsed->hour * 60) + $parsed->minute;
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-
-    private function minutesToTime(int $minutes): string
-    {
-        return sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60);
-    }
-
-    private function isLunchMinute(int $minutes): bool
-    {
-        return $minutes >= self::LUNCH_START_MINUTES && $minutes < self::LUNCH_END_MINUTES;
-    }
-
-    /**
-     * Build 30-minute interval occupancy counts for Groomer and Veterinarian pools.
-     */
-    private function analyzeDayOccupancy(string $branch, string $date, ?int $excludeAppointmentId = null): array
-    {
-        $query = Appointment::where('branch', $branch)
-            ->whereDate('appointment_date', $date)
-            ->whereIn('status', self::ACTIVE_STATUSES)
-            ->whereNotNull('appointment_time')
-            ->where('appointment_time', '!=', '')
-            ->where('appointment_time', '!=', 'ON_CALL');
-
-        if ($excludeAppointmentId !== null) {
-            $query->where('id', '!=', $excludeAppointmentId);
-        }
-
-        $appointments = $query->get(['id', 'appointment_time', 'reason', 'service_type', 'duration_minutes']);
-
-        $groomerCounts = [];
-        $vetCounts = [];
-        $rawEntries = [];
-
-        foreach ($appointments as $appt) {
-            $startMins = $this->timeToMinutes($appt->appointment_time);
-            if ($startMins === null) {
-                continue;
-            }
-
-            $type = Appointment::resolveServiceType($appt->reason, $appt->service_type);
-            $isGrooming = $type === 'grooming' || ((int) ($appt->duration_minutes ?? 0) >= 120);
-
-            if ($isGrooming) {
-                foreach ([0, 30, 60, 90] as $offset) {
-                    $m = $startMins + $offset;
-                    $groomerCounts[$m] = ($groomerCounts[$m] ?? 0) + 1;
-                }
-            } else {
-                $vetCounts[$startMins] = ($vetCounts[$startMins] ?? 0) + 1;
-            }
-
-            $rawEntries[] = [
-                'start' => $startMins,
-                'is_grooming' => $isGrooming,
-                'type' => $type,
-            ];
-        }
-
-        return [
-            'groomer' => $groomerCounts,
-            'vet'     => $vetCounts,
-            'entries' => $rawEntries,
-        ];
-    }
-
-    private function slotHasCapacity(int $startMins, string $serviceType, int $capacity, array $occupancy): bool
-    {
-        if ($this->isLunchMinute($startMins) || $startMins > self::DAY_END_MINUTES) {
-            return false;
-        }
-
-        if ($serviceType === 'grooming') {
-            if ($startMins > self::GROOMING_CUTOFF_MINUTES) {
-                return false;
-            }
-            foreach ([0, 30, 60, 90] as $offset) {
-                $m = $startMins + $offset;
-                if ($this->isLunchMinute($m) || ($occupancy['groomer'][$m] ?? 0) >= $capacity) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        return ($occupancy['vet'][$startMins] ?? 0) < $capacity;
-    }
-
-    private function reserveSlotInOccupancy(int $startMins, string $serviceType, array &$occupancy): void
-    {
-        if ($serviceType === 'grooming') {
-            foreach ([0, 30, 60, 90] as $offset) {
-                $m = $startMins + $offset;
-                $occupancy['groomer'][$m] = ($occupancy['groomer'][$m] ?? 0) + 1;
-            }
-        } else {
-            $occupancy['vet'][$startMins] = ($occupancy['vet'][$startMins] ?? 0) + 1;
-        }
-    }
-
-    private function computeUnavailableSlots(
-        string $branch,
-        string $date,
-        ?string $requestedService = null,
-        ?int $excludeAppointmentId = null
-    ): array {
-        $occupancy = $this->analyzeDayOccupancy($branch, $date, $excludeAppointmentId);
-
-        if ($requestedService === null || trim($requestedService) === '') {
-            $booked = [];
-            foreach ($occupancy['entries'] as $entry) {
-                $cap = Appointment::branchCapacityForService($branch, $entry['is_grooming'] ? 'grooming' : $entry['type']);
-                if ($entry['is_grooming']) {
-                    foreach ([0, 30, 60, 90] as $offset) {
-                        $m = $entry['start'] + $offset;
-                        if (($occupancy['groomer'][$m] ?? 0) >= $cap) {
-                            $booked[] = $this->minutesToTime($m);
-                        }
-                    }
-                } elseif (($occupancy['vet'][$entry['start']] ?? 0) >= $cap) {
-                    $booked[] = $this->minutesToTime($entry['start']);
-                }
-            }
-
-            $booked = array_values(array_unique($booked));
-            sort($booked);
-
-            return [
-                'booked_slots'     => $booked,
-                'cutoff_slots'     => [],
-                'slot_counts'      => [],
-                'capacity'         => 1,
-                'duration_minutes' => 30,
-            ];
-        }
-
-        $reqType = Appointment::resolveServiceType($requestedService, $requestedService);
-        $capacity = Appointment::branchCapacityForService($branch, $reqType);
-        $duration = Appointment::durationForService($reqType);
-
-        if ($reqType === 'surgery') {
-            return [
-                'booked_slots'     => [],
-                'cutoff_slots'     => [],
-                'slot_counts'      => [],
-                'capacity'         => $capacity,
-                'duration_minutes' => $duration,
-            ];
-        }
-
-        $bookedSlots = [];
-        $cutoffSlots = [];
-        $slotCounts = [];
-
-        for ($t = self::DAY_START_MINUTES; $t <= self::DAY_END_MINUTES; $t += 30) {
-            if ($this->isLunchMinute($t)) {
-                continue;
-            }
-
-            $hhmm = $this->minutesToTime($t);
-
-            if ($reqType === 'grooming') {
-                $maxOccupancy = max(
-                    $occupancy['groomer'][$t] ?? 0,
-                    $occupancy['groomer'][$t + 30] ?? 0,
-                    $occupancy['groomer'][$t + 60] ?? 0,
-                    $occupancy['groomer'][$t + 90] ?? 0
-                );
-                $slotCounts[$hhmm] = $maxOccupancy;
-
-                if ($t > self::GROOMING_CUTOFF_MINUTES) {
-                    $cutoffSlots[] = $hhmm;
-                    $bookedSlots[] = $hhmm;
-                } elseif (!$this->slotHasCapacity($t, $reqType, $capacity, $occupancy)) {
-                    $bookedSlots[] = $hhmm;
-                }
-            } else {
-                $slotCounts[$hhmm] = $occupancy['vet'][$t] ?? 0;
-                if (!$this->slotHasCapacity($t, $reqType, $capacity, $occupancy)) {
-                    $bookedSlots[] = $hhmm;
-                }
-            }
-        }
-
-        return [
-            'booked_slots'     => array_values(array_unique($bookedSlots)),
-            'cutoff_slots'     => array_values(array_unique($cutoffSlots)),
-            'slot_counts'      => $slotCounts,
-            'capacity'         => $capacity,
-            'duration_minutes' => $duration,
-        ];
-    }
-
-    /**
-     * Return already-booked HH:MM slots for a branch and date.
+     * Return already-booked HH:MM slots for a branch, date, and service pool.
      *
      * GET /api/appointments/booked-slots
      */
@@ -320,16 +95,18 @@ class AppointmentController extends Controller
 
         $date = Carbon::parse($request->date)->toDateString();
         $serviceParam = $request->input('service', $request->input('reason'));
-        $result = $this->computeUnavailableSlots($request->branch, $date, $serviceParam);
+        $result = BranchCapacityService::computeUnavailableSlots($request->branch, $date, $serviceParam);
 
         return response()->json([
             'status'           => 'success',
             'booked_slots'     => $result['booked_slots'],
             'cutoff_slots'     => $result['cutoff_slots'],
             'slot_counts'      => $result['slot_counts'],
+            'remaining_slots'  => $result['remaining_slots'],
             'capacity'         => $result['capacity'],
+            'pool'             => $result['pool'],
             'duration_minutes' => $result['duration_minutes'],
-        ]);
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     /**
@@ -460,19 +237,19 @@ class AppointmentController extends Controller
             return $lunchError;
         }
 
-        $requestedStartMins = $this->timeToMinutes($request->appointment_time);
+        $requestedStartMins = BranchCapacityService::timeToMinutes($request->appointment_time);
         if ($requestedStartMins === null) {
             return response()->json(['message' => 'Invalid appointment time.'], 400);
         }
 
         if ($serviceType === 'grooming') {
-            if ($requestedStartMins > self::GROOMING_CUTOFF_MINUTES) {
+            if ($requestedStartMins > BranchCapacityService::GROOMING_CUTOFF_MINUTES) {
                 return response()->json([
                     'message' => 'Grooming takes 2 hours. The latest booking start time for grooming is 3:00 PM.',
                 ], 422);
             }
             foreach ([0, 30, 60, 90] as $offset) {
-                if ($this->isLunchMinute($requestedStartMins + $offset)) {
+                if (BranchCapacityService::isLunchMinute($requestedStartMins + $offset)) {
                     return response()->json([
                         'message' => 'Grooming takes 2 hours and cannot overlap the 12:00 PM - 1:00 PM lunch break. Please choose another time.',
                     ], 422);
@@ -481,25 +258,25 @@ class AppointmentController extends Controller
         }
 
         $capacity = Appointment::branchCapacityForService($request->branch, $serviceType);
-        $occupancy = $this->analyzeDayOccupancy($request->branch, $dateStr);
+        $occupancy = BranchCapacityService::analyzeDayOccupancy($request->branch, $dateStr);
         $assignedTimes = [];
 
         foreach ($pets as $idx => $pet) {
             $candidateMins = $requestedStartMins;
 
             if ($idx === 0) {
-                if (!$this->slotHasCapacity($candidateMins, $serviceType, $capacity, $occupancy)) {
+                if (!BranchCapacityService::slotHasCapacity($candidateMins, $serviceType, $capacity, $occupancy)) {
                     return response()->json([
                         'message' => 'This time slot is already booked',
                         'error'   => 'This time slot is already booked',
                     ], 409);
                 }
             } else {
-                while ($candidateMins <= self::DAY_END_MINUTES && !$this->slotHasCapacity($candidateMins, $serviceType, $capacity, $occupancy)) {
+                while ($candidateMins <= BranchCapacityService::DAY_END_MINUTES && !BranchCapacityService::slotHasCapacity($candidateMins, $serviceType, $capacity, $occupancy)) {
                     $candidateMins += 30;
                 }
 
-                if ($candidateMins > self::DAY_END_MINUTES || !$this->slotHasCapacity($candidateMins, $serviceType, $capacity, $occupancy)) {
+                if ($candidateMins > BranchCapacityService::DAY_END_MINUTES || !BranchCapacityService::slotHasCapacity($candidateMins, $serviceType, $capacity, $occupancy)) {
                     return response()->json([
                         'message' => 'Not enough available slots remaining on this date for all selected pets.',
                         'error'   => 'Not enough available slots remaining on this date for all selected pets.',
@@ -507,8 +284,8 @@ class AppointmentController extends Controller
                 }
             }
 
-            $this->reserveSlotInOccupancy($candidateMins, $serviceType, $occupancy);
-            $assignedTimes[$pet->id] = $this->minutesToTime($candidateMins);
+            BranchCapacityService::reserveSlotInOccupancy($candidateMins, $serviceType, $occupancy);
+            $assignedTimes[$pet->id] = BranchCapacityService::minutesToTime($candidateMins);
         }
 
         $createdAppointments = DB::transaction(function () use ($pets, $user, $request, $dateStr, $assignedTimes, $serviceType, $duration, $batchId) {
@@ -648,14 +425,14 @@ class AppointmentController extends Controller
         // Service-aware conflict check excluding current appointment
         $serviceType = Appointment::resolveServiceType($appointment->reason, $appointment->service_type);
         $capacity = Appointment::branchCapacityForService($appointment->branch, $serviceType);
-        $occupancy = $this->analyzeDayOccupancy(
+        $occupancy = BranchCapacityService::analyzeDayOccupancy(
             $appointment->branch,
             Carbon::parse($request->appointment_date)->toDateString(),
             $appointment->id
         );
-        $startMins = $this->timeToMinutes($request->appointment_time);
+        $startMins = BranchCapacityService::timeToMinutes($request->appointment_time);
 
-        if ($startMins === null || !$this->slotHasCapacity($startMins, $serviceType === 'surgery' ? 'checkup' : $serviceType, $capacity, $occupancy)) {
+        if ($startMins === null || !BranchCapacityService::slotHasCapacity($startMins, $serviceType, $capacity, $occupancy)) {
             return response()->json([
                 'message' => 'That time slot is already booked or unavailable for this branch.',
             ], 422);
