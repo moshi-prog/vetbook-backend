@@ -73,6 +73,7 @@
 </div>
 
 <form method="POST"
+      enctype="multipart/form-data"
       action="{{ $record ? route('admin.medical-records.update', $record->id) : route('admin.medical-records.store') }}">
     @csrf
     @if($record) @method('PUT') @endif
@@ -187,6 +188,57 @@
                   class="f-input {{ $fieldError('notes') ? 'is-invalid' : '' }}">{{ $val('notes') }}</textarea>
         @if($fieldError('notes')) <div class="f-error">{{ $fieldError('notes') }}</div> @endif
 
+        {{-- Medical Record Photos --}}
+        @php
+            $existingImages = $record ? $record->images : collect();
+            $remainingImageSlots = max(0, \App\Models\MedicalRecord::MAX_IMAGES - $existingImages->count());
+        @endphp
+        <div class="form-section-title">
+            <i class="fas fa-images"></i> Medical Record Photos (Up to 5 images)
+            <span class="ms-auto badge rounded-pill" style="background: #F5F1EA; color: #6B6358; font-size: 11px; font-weight: 700;">
+                {{ $existingImages->count() }} / {{ \App\Models\MedicalRecord::MAX_IMAGES }} uploaded &middot; {{ $remainingImageSlots }} remaining
+            </span>
+        </div>
+
+        @if($existingImages->isNotEmpty())
+            <div class="row g-2 mb-3">
+                @foreach($existingImages as $img)
+                    @php $isStaffImg = $img->uploaded_by_role !== 'pet_owner'; @endphp
+                    <div class="col-6 col-md-3">
+                        <div class="p-2 rounded-4 border bg-white h-100 d-flex flex-column gap-1" style="border-color: #EAE6DE !important;">
+                            <img src="{{ $img->image_url }}" alt="Medical record photo"
+                                 style="width: 100%; height: 110px; object-fit: cover; border-radius: 12px; background: #FAF6F0;">
+                            <div class="d-flex align-items-center justify-content-between gap-1 flex-wrap mt-1">
+                                <span class="badge rounded-pill" style="background: {{ $isStaffImg ? '#C8E8D0' : '#F8E0A8' }}; color: {{ $isStaffImg ? '#2A6038' : '#705C30' }}; font-size: 10px;">
+                                    {{ $isStaffImg ? 'Staff' : 'Pet Owner' }}
+                                </span>
+                                <small class="text-muted text-truncate" style="font-size: 10px;">{{ $img->uploaded_by_name ?: ($isStaffImg ? 'Staff' : 'Pet Owner') }}</small>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+
+        <div>
+            <label class="f-label" for="recordImagesInput">
+                {{ $remainingImageSlots > 0 ? "Attach Photos (up to {$remainingImageSlots} more)" : 'Maximum 5 photos reached' }}
+            </label>
+            <input type="file"
+                   id="recordImagesInput"
+                   name="images[]"
+                   accept="image/jpeg,image/png,image/webp,image/gif"
+                   multiple
+                   class="f-input {{ ($fieldError('images') || $fieldError('images.*')) ? 'is-invalid' : '' }}"
+                   data-max-remaining="{{ $remainingImageSlots }}"
+                   {{ $remainingImageSlots === 0 ? 'disabled' : '' }}>
+            <div class="f-help">Accepted formats: JPG, PNG, WebP, GIF (max 8 MB each; auto-resized cleanly for mobile & web).</div>
+            @if($fieldError('images')) <div class="f-error">{{ $fieldError('images') }}</div> @endif
+            @if($fieldError('images.*')) <div class="f-error">{{ $fieldError('images.*') }}</div> @endif
+            <div id="recordImagesGuardMsg" class="f-error d-none"></div>
+            <div id="recordImagesPreviewGrid" class="row g-2 mt-2"></div>
+        </div>
+
         <div class="form-actions">
             <a href="{{ $record ? route('admin.medical-records.show', $record->id) : route('admin.medical-records.index') }}"
                class="btn-soft">Cancel</a>
@@ -245,6 +297,45 @@
                     if (remaining <= 0) {
                         this.disabled = true;
                     }
+                });
+            });
+        }
+
+        const imagesInput = document.getElementById('recordImagesInput');
+        const previewGrid = document.getElementById('recordImagesPreviewGrid');
+        const guardMsg = document.getElementById('recordImagesGuardMsg');
+
+        if (imagesInput && previewGrid) {
+            imagesInput.addEventListener('change', function () {
+                const maxRemaining = parseInt(this.getAttribute('data-max-remaining') || '5', 10);
+                previewGrid.innerHTML = '';
+                if (guardMsg) {
+                    guardMsg.classList.add('d-none');
+                    guardMsg.textContent = '';
+                }
+
+                const files = Array.from(this.files || []);
+                if (files.length > maxRemaining) {
+                    this.value = '';
+                    if (guardMsg) {
+                        guardMsg.textContent = `You can upload at most ${maxRemaining} more image(s) for this record (max 5 total).`;
+                        guardMsg.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                files.forEach((file) => {
+                    if (!file.type.startsWith('image/')) return;
+                    const reader = new FileReader();
+                    reader.onload = function (ev) {
+                        const col = document.createElement('div');
+                        col.className = 'col-4 col-md-2';
+                        col.innerHTML = `<div class="p-1 bg-white border rounded-3 text-center" style="border-color: #EAE6DE !important;">
+                            <img src="${ev.target.result}" alt="Preview" style="width: 100%; height: 82px; object-fit: cover; border-radius: 10px;">
+                        </div>`;
+                        previewGrid.appendChild(col);
+                    };
+                    reader.readAsDataURL(file);
                 });
             });
         }

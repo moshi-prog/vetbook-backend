@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppNotification;
 use App\Models\MedicalRecord;
+use App\Models\MedicalRecordImage;
 use App\Models\Pet;
+use App\Models\User;
+use App\Services\MedicalImageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -43,7 +48,8 @@ class MedicalRecordController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $records = MedicalRecord::where('pet_id', $pet->id)
+        $records = MedicalRecord::with('images')
+            ->where('pet_id', $pet->id)
             ->orderBy('consultation_date', 'desc')
             ->get();
 
@@ -116,7 +122,7 @@ class MedicalRecordController extends Controller
     {
         $user = JWTAuth::parseToken()->authenticate();
 
-        $record = MedicalRecord::with('pet')->find($id);
+        $record = MedicalRecord::with(['pet', 'images'])->find($id);
 
         if (! $record) {
             return response()->json(['message' => 'Medical record not found'], 404);
@@ -142,7 +148,7 @@ class MedicalRecordController extends Controller
             return $denied;
         }
 
-        $record = MedicalRecord::with('pet')->find($id);
+        $record = MedicalRecord::with(['pet', 'images'])->find($id);
 
         if (! $record) {
             return response()->json(['message' => 'Medical record not found'], 404);
@@ -188,6 +194,119 @@ class MedicalRecordController extends Controller
         return response()->json([
             'message'        => 'Medical record updated',
             'medical_record' => $record,
+        ]);
+    }
+
+    /**
+     * Upload up to 5 images total onto a pet's medical record (pet owner or clinic staff).
+     *
+     * POST /api/medical-records/{id}/images
+     */
+    public function uploadImages(Request $request, $id): JsonResponse
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+
+        $record = MedicalRecord::with(['pet', 'images'])->find($id);
+        if (! $record) {
+            return response()->json(['message' => 'Medical record not found'], 404);
+        }
+
+        $isStaff = in_array($user->role, self::STAFF_ROLES, true);
+        if ((int) $record->pet?->user_id !== (int) $user->id && ! $isStaff) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        [$ok, $dataUris, $error] = MedicalImageService::extractImagesFromRequest($request);
+        if (! $ok) {
+            return response()->json(['message' => $error], 422);
+        }
+
+        $existingCount = $record->images->count();
+        if ($existingCount + count($dataUris) > MedicalRecord::MAX_IMAGES) {
+            $remaining = max(0, MedicalRecord::MAX_IMAGES - $existingCount);
+            return response()->json([
+                'message' => "A medical record can have at most 5 images. Only {$remaining} slot(s) remaining.",
+            ], 422);
+        }
+
+        $uploaderRole = $isStaff ? 'staff' : 'pet_owner';
+        foreach ($dataUris as $uri) {
+            MedicalRecordImage::create([
+                'medical_record_id'   => $record->id,
+                'uploaded_by_user_id' => $user->id,
+                'uploaded_by_role'    => $uploaderRole,
+                'uploaded_by_name'    => $user->name,
+                'image_data'          => $uri,
+            ]);
+        }
+
+        if ($uploaderRole === 'pet_owner') {
+            try {
+                $petName = $record->pet?->name ?? 'a pet';
+                $staffUsers = User::where('role', 'admin')
+                    ->whereNotNull('branch')
+                    ->where('branch', '!=', '')
+                    ->get();
+
+                foreach ($staffUsers as $staff) {
+                    AppNotification::create([
+                        'user_id' => $staff->id,
+                        'title'   => 'New Medical Record Photo from Pet Owner',
+                        'message' => "{$user->name} uploaded photo(s) to {$petName}'s medical record.",
+                        'type'    => 'medical_record',
+                        'data'    => [
+                            'record_id' => $record->id,
+                            'pet_id'    => $record->pet_id,
+                        ],
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Failed to notify branch staff of medical record photo upload: ' . $e->getMessage());
+            }
+        }
+
+        $freshRecord = $record->fresh(['pet', 'images']);
+
+        return response()->json([
+            'message'        => 'Image(s) uploaded successfully.',
+            'images'         => $freshRecord->images,
+            'medical_record' => $freshRecord,
+        ], 201);
+    }
+
+    /**
+     * Delete an attached image from a medical record.
+     * Staff may delete any image on the record; Pet Owners may delete only their own uploads.
+     *
+     * DELETE /api/medical-records/{id}/images/{imageId}
+     */
+    public function destroyImage($id, $imageId): JsonResponse
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+
+        $record = MedicalRecord::with('pet')->find($id);
+        if (! $record) {
+            return response()->json(['message' => 'Medical record not found'], 404);
+        }
+
+        $image = MedicalRecordImage::where('medical_record_id', $id)->find($imageId);
+        if (! $image) {
+            return response()->json(['message' => 'Image not found'], 404);
+        }
+
+        $isStaff = in_array($user->role, self::STAFF_ROLES, true);
+        $isOwnOwnerImage = (int) $record->pet?->user_id === (int) $user->id
+            && (int) $image->uploaded_by_user_id === (int) $user->id;
+
+        if (! $isStaff && ! $isOwnOwnerImage) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $image->delete();
+
+        return response()->json([
+            'message' => 'Image removed successfully.',
+            'images'  => $record->fresh('images')->images,
         ]);
     }
 }

@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class MedicalRecord extends Model
 {
+    public const MAX_IMAGES = 5;
+
     protected $fillable = [
         'pet_id',
         'veterinarian',
@@ -29,5 +31,10 @@ class MedicalRecord extends Model
     public function pet()
     {
         return $this->belongsTo(Pet::class);
+    }
+
+    public function images()
+    {
+        return $this->hasMany(MedicalRecordImage::class)->orderBy('id');
     }
 }

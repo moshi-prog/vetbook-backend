@@ -77,6 +77,8 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/pets/{petId}/medical-records', [MedicalRecordController::class, 'store']);
     Route::get('/medical-records/{id}',          [MedicalRecordController::class, 'show']);
     Route::put('/medical-records/{id}',          [MedicalRecordController::class, 'update']);
+    Route::post('/medical-records/{id}/images',            [MedicalRecordController::class, 'uploadImages']);
+    Route::delete('/medical-records/{id}/images/{imageId}', [MedicalRecordController::class, 'destroyImage']);
 
     // -----------------------------------------------------------------------
     // Chatbot

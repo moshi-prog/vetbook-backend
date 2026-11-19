@@ -76,6 +76,12 @@
                                     Next visit {{ $r->next_visit_date->format('M d, Y') }}
                                 </span>
                             @endif
+                            @php $imgCount = $r->images_count ?? ($r->relationLoaded('images') ? $r->images->count() : 0); @endphp
+                            @if($imgCount > 0)
+                                <span class="branch-chip">
+                                    <i class="fas fa-images"></i>{{ $imgCount }} {{ \Illuminate\Support\Str::plural('photo', $imgCount) }}
+                                </span>
+                            @endif
                             @if($showPet)
                                 @foreach($seenAt as $b)
                                     <span class="branch-chip {{ ($branch ?? null) && $b === $branch ? 'mine' : '' }}">

@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AppNotification;
 use App\Models\MedicalRecord;
+use App\Models\MedicalRecordImage;
 use App\Models\Medicine;
 use App\Models\Pet;
+use App\Services\MedicalImageService;
 use App\Services\PushNotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -34,7 +37,7 @@ class MedicalRecordController extends Controller
         $search = trim((string) $request->input('search', ''));
         $period = $request->input('period', 'all');
 
-        $query = MedicalRecord::with([
+        $query = MedicalRecord::withCount('images')->with([
             'pet:id,user_id,name,species,breed,age,age_months,gender,weight,health_status',
             'pet.owner:id,name,email,phone_number',
             'pet.appointments' => function ($q) {
@@ -122,6 +125,7 @@ class MedicalRecordController extends Controller
             'pet.appointments' => function ($q) {
                 $q->select('id', 'pet_id', 'branch');
             },
+            'images',
         ])->findOrFail($id);
 
         return view('admin.medical-records.show', compact('record'));
@@ -141,6 +145,7 @@ class MedicalRecordController extends Controller
         ])->findOrFail($petId);
 
         $records = $pet->medicalRecords()
+            ->with('images')
             ->orderByDesc('consultation_date')
             ->orderByDesc('id')
             ->get();
@@ -169,13 +174,20 @@ class MedicalRecordController extends Controller
         $data = $this->validated($request);
         $dispensedItems = $this->extractDispensedMedicines($request);
 
+        [$imagesOk, $imageUris, $imageErr] = $this->extractStaffUploadedImages($request, 0);
+        if (!$imagesOk) {
+            return back()->withInput()->with('error', $imageErr);
+        }
+
         $vet = trim((string) ($data['veterinarian'] ?? ''));
         $data['veterinarian'] = $vet !== '' ? $vet : null;
 
         $userBranch = auth()->user()?->branch;
 
-        $record = DB::transaction(function () use ($data, $dispensedItems, $userBranch) {
+        $record = DB::transaction(function () use ($data, $dispensedItems, $userBranch, $imageUris) {
             $created = MedicalRecord::create($data);
+
+            $this->saveStaffImages($created, $imageUris);
 
             if (!empty($dispensedItems) && Schema::hasTable('medicines')) {
                 foreach ($dispensedItems as $medicineId => $qty) {
@@ -239,7 +251,7 @@ class MedicalRecordController extends Controller
     {
         $this->ensureStaffBranch();
 
-        $record = MedicalRecord::findOrFail($id);
+        $record = MedicalRecord::with('images')->findOrFail($id);
 
         return view('admin.medical-records.form', [
             'record' => $record,
@@ -253,8 +265,13 @@ class MedicalRecordController extends Controller
     {
         $this->ensureStaffBranch();
 
-        $record = MedicalRecord::findOrFail($id);
+        $record = MedicalRecord::with('images')->findOrFail($id);
         $data = $this->validated($request);
+
+        [$imagesOk, $imageUris, $imageErr] = $this->extractStaffUploadedImages($request, $record->images->count());
+        if (!$imagesOk) {
+            return back()->withInput()->with('error', $imageErr);
+        }
 
         if (!$request->has('veterinarian') && $record->veterinarian) {
             $data['veterinarian'] = $record->veterinarian;
@@ -263,10 +280,102 @@ class MedicalRecordController extends Controller
             $data['veterinarian'] = $vet !== '' ? $vet : null;
         }
 
-        $record->update($data);
+        DB::transaction(function () use ($record, $data, $imageUris) {
+            $record->update($data);
+            $this->saveStaffImages($record, $imageUris);
+        });
 
         return redirect()->route('admin.medical-records.show', $record->id)
             ->with('success', 'Medical record updated successfully.');
+    }
+
+    /**
+     * Upload additional photos (up to 5 total) to a medical record as Clinic Staff.
+     */
+    public function uploadImages(Request $request, $id)
+    {
+        $this->ensureStaffBranch();
+
+        $record = MedicalRecord::with(['pet.owner', 'images'])->findOrFail($id);
+
+        $rawFiles = $request->file('images');
+        $files = $rawFiles instanceof UploadedFile ? [$rawFiles] : (is_array($rawFiles) ? $rawFiles : []);
+        if (empty($files)) {
+            $request->validate([
+                'images'   => 'required|array|min:1',
+                'images.*' => 'required|image|mimes:jpeg,jpg,png,webp,gif|max:8192',
+            ]);
+        }
+
+        $request->validate([
+            'images.*' => 'required|image|mimes:jpeg,jpg,png,webp,gif|max:8192',
+        ]);
+
+        $existingCount = $record->images->count();
+        $remaining = max(0, MedicalRecord::MAX_IMAGES - $existingCount);
+        if (count($files) > $remaining) {
+            return back()->with('error', "Maximum of 5 images allowed per medical record. You can upload at most {$remaining} more.");
+        }
+
+        $uris = [];
+        foreach ($files as $file) {
+            [$ok, $uri, $err] = MedicalImageService::processUploadedFile($file);
+            if (!$ok) {
+                return back()->with('error', $err ?: 'Invalid image file.');
+            }
+            $uris[] = $uri;
+        }
+
+        $this->saveStaffImages($record, $uris);
+
+        try {
+            $owner = $record->pet?->owner;
+            $petName = $record->pet?->name ?? 'your pet';
+            if ($owner) {
+                $title = 'New Photo Added to Medical Record';
+                $msg = "Clinic staff added new photo(s) to {$petName}'s medical record.";
+                AppNotification::create([
+                    'user_id' => $owner->id,
+                    'title'   => $title,
+                    'message' => $msg,
+                    'type'    => 'medical_record',
+                    'data'    => [
+                        'record_id' => $record->id,
+                        'pet_id'    => $record->pet_id,
+                    ],
+                ]);
+
+                if ($owner->push_token) {
+                    PushNotificationService::send(
+                        $owner->push_token,
+                        $title,
+                        $msg,
+                        [
+                            'record_id' => $record->id,
+                            'pet_id'    => $record->pet_id,
+                            'type'      => 'medical_record',
+                        ]
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Failed to notify owner of new medical record photo(s): ' . $e->getMessage());
+        }
+
+        return back()->with('success', 'Image(s) uploaded to medical record.');
+    }
+
+    /**
+     * Remove an attached photo from a medical record (Staff).
+     */
+    public function destroyImage($id, $imageId)
+    {
+        $this->ensureStaffBranch();
+
+        $image = MedicalRecordImage::where('medical_record_id', $id)->findOrFail($imageId);
+        $image->delete();
+
+        return back()->with('success', 'Image removed from medical record.');
     }
 
     public function destroy(Request $request, $id)
@@ -392,6 +501,61 @@ class MedicalRecordController extends Controller
     }
 
     // ------------------------------------------------------------------
+
+    private function extractStaffUploadedImages(Request $request, int $existingCount): array
+    {
+        if (!$request->hasFile('images')) {
+            return [true, [], null];
+        }
+
+        $rawFiles = $request->file('images');
+        $files = $rawFiles instanceof UploadedFile ? [$rawFiles] : (is_array($rawFiles) ? $rawFiles : []);
+        if (empty($files)) {
+            return [true, [], null];
+        }
+
+        $request->validate([
+            'images.*' => 'image|mimes:jpeg,jpg,png,webp,gif|max:8192',
+        ]);
+
+        if ($existingCount + count($files) > MedicalRecord::MAX_IMAGES) {
+            return [false, [], 'A medical record can have at most ' . MedicalRecord::MAX_IMAGES . ' images.'];
+        }
+
+        $uris = [];
+        foreach ($files as $file) {
+            if (!$file instanceof UploadedFile) {
+                continue;
+            }
+            [$ok, $uri, $err] = MedicalImageService::processUploadedFile($file);
+            if (!$ok) {
+                return [false, [], $err ?: 'Invalid image file.'];
+            }
+            $uris[] = $uri;
+        }
+
+        return [true, $uris, null];
+    }
+
+    private function saveStaffImages(MedicalRecord $record, array $dataUris): void
+    {
+        if (empty($dataUris)) {
+            return;
+        }
+
+        $userId = auth()->id();
+        $userName = auth()->user()?->name ?: 'Clinic Staff';
+
+        foreach ($dataUris as $uri) {
+            MedicalRecordImage::create([
+                'medical_record_id'   => $record->id,
+                'uploaded_by_user_id' => $userId,
+                'uploaded_by_role'    => 'staff',
+                'uploaded_by_name'    => $userName,
+                'image_data'          => $uri,
+            ]);
+        }
+    }
 
     private function validated(Request $request): array
     {

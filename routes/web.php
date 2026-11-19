@@ -69,6 +69,8 @@ Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {
     Route::get('/medical-records/{id}/edit', [MedicalRecordController::class, 'edit'])->name('medical-records.edit');
     Route::put('/medical-records/{id}', [MedicalRecordController::class, 'update'])->name('medical-records.update');
     Route::delete('/medical-records/{id}', [MedicalRecordController::class, 'destroy'])->name('medical-records.destroy');
+    Route::post('/medical-records/{id}/images', [MedicalRecordController::class, 'uploadImages'])->name('medical-records.images.store');
+    Route::delete('/medical-records/{id}/images/{imageId}', [MedicalRecordController::class, 'destroyImage'])->name('medical-records.images.destroy');
 
     // Pet owners
     Route::get('/pet-owners', [PetOwnerController::class, 'index'])->name('pet-owners.index');
