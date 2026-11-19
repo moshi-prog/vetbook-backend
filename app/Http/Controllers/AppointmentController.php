@@ -789,6 +789,12 @@ class AppointmentController extends Controller
         $appointment->status = Appointment::STATUS_CANCELLED;
         $appointment->save();
 
+        try {
+            \App\Services\AppointmentReminderService::markReminderNotificationsReadForAppointment((int) $appointment->id);
+        } catch (\Throwable $e) {
+            \Log::warning('Reminder cleanup on owner cancel failed: ' . $e->getMessage());
+        }
+
         $ownerName = $user->name ?? ($appointment->user?->name ?? 'Pet Owner');
         $petName = $appointment->pet?->name ?? 'your pet';
         $formattedDate = \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y');
@@ -987,6 +993,12 @@ class AppointmentController extends Controller
         $appointment->attendance_confirmed_at = now();
         $appointment->save();
 
+        try {
+            \App\Services\AppointmentReminderService::markReminderNotificationsReadForAppointment((int) $appointment->id);
+        } catch (\Throwable $e) {
+            \Log::warning('Reminder cleanup on confirmAttendance failed: ' . $e->getMessage());
+        }
+
         $petName = $appointment->pet?->name ?? 'your pet';
         $formattedDate = Carbon::parse($appointment->appointment_date)->format('M d, Y');
         $formattedTime = Appointment::format12Hour($appointment->appointment_time);
@@ -1056,6 +1068,14 @@ class AppointmentController extends Controller
 
         $appointment->status = $request->status;
         $appointment->save();
+
+        if (in_array($request->status, [Appointment::STATUS_CANCELLED, Appointment::STATUS_COMPLETED], true)) {
+            try {
+                \App\Services\AppointmentReminderService::markReminderNotificationsReadForAppointment((int) $appointment->id);
+            } catch (\Throwable $e) {
+                \Log::warning('Reminder cleanup on updateStatus failed: ' . $e->getMessage());
+            }
+        }
 
         return response()->json([
             'message'     => 'Status updated',

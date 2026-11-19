@@ -22,6 +22,12 @@ class AppointmentController extends Controller
     {
         $this->ensureStaffBranch();
 
+        try {
+            \App\Services\AppointmentReminderService::dispatchDueReminders();
+        } catch (\Throwable $e) {
+            \Log::warning('Admin appointments reminder dispatch failed: ' . $e->getMessage());
+        }
+
         $user = auth()->user();
         $branch = $user->branch;
 
@@ -385,6 +391,12 @@ class AppointmentController extends Controller
         $appointment->status = 'completed';
         $appointment->save();
 
+        try {
+            \App\Services\AppointmentReminderService::markReminderNotificationsReadForAppointment((int) $appointment->id);
+        } catch (\Throwable $e) {
+            \Log::warning('Reminder cleanup on complete failed: ' . $e->getMessage());
+        }
+
         // Create In-App Notification for pet owner
         try {
             $appointment->load(['user', 'pet']);
@@ -442,6 +454,12 @@ class AppointmentController extends Controller
                 . "[Cancelled] " . $request->cancel_reason;
         }
         $appointment->save();
+
+        try {
+            \App\Services\AppointmentReminderService::markReminderNotificationsReadForAppointment((int) $appointment->id);
+        } catch (\Throwable $e) {
+            \Log::warning('Reminder cleanup on cancel failed: ' . $e->getMessage());
+        }
 
         // Create In-App Notification for pet owner
         try {

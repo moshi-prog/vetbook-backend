@@ -39,6 +39,12 @@ class DashboardController extends Controller
             ));
         }
 
+        try {
+            \App\Services\AppointmentReminderService::dispatchDueReminders();
+        } catch (\Throwable $e) {
+            \Log::warning('Dashboard reminder dispatch failed: ' . $e->getMessage());
+        }
+
         // Base queries with optional branch filter
         $appointmentsQuery = Appointment::query();
         $petsQuery = Pet::query();

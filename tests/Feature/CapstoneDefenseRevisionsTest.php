@@ -459,88 +459,134 @@ class CapstoneDefenseRevisionsTest extends TestCase
         $this->assertNotEmpty($batchIds[0]);
     }
 
-    public function test_24h_and_3h_reminders_and_pet_owner_attendance_confirmation(): void
+    public function test_1day_reminder_12h_waiting_time_auto_cancellation_and_staff_portal_sync(): void
     {
-        $this->travelTo(Carbon::today()->setHour(8)->setMinute(0)->setSecond(0));
+        $manilaNow = Carbon::now('Asia/Manila')->startOfDay()->setHour(8);
+        $this->travelTo($manilaNow->copy()->utc());
 
         $mabiniStaff = $this->createStaff('Mabini Branch');
-        [$owner, $pets] = $this->createApprovedOwnerWithPets(2);
+        [$owner, $pets] = $this->createApprovedOwnerWithPets(3);
         $token = JWTAuth::fromUser($owner);
 
-        // 1-day before (tomorrow) appointment
-        $tomorrowAppt = Appointment::create([
+        $tomorrowDate = $manilaNow->copy()->addDay()->toDateString();
+        $todayDate = $manilaNow->toDateString();
+
+        // 1-day before (tomorrow) appointments: one will be confirmed, one will be ignored past 12h
+        $confirmedTomorrowAppt = Appointment::create([
             'user_id' => $owner->id,
             'pet_id' => $pets[0]->id,
             'branch' => 'Mabini Branch',
-            'appointment_date' => Carbon::tomorrow()->toDateString(),
-            'appointment_time' => '10:00',
+            'appointment_date' => $tomorrowDate,
+            'appointment_time' => '09:00',
             'status' => Appointment::STATUS_APPROVED,
             'reason' => 'Diagnostic / Checkup',
         ]);
 
-        // 2-hour window (today, 2 hours from now) appointment
-        $twoHoursLater = now()->addHours(2);
-        $sameDayAppt = Appointment::create([
+        $ignoredTomorrowAppt = Appointment::create([
             'user_id' => $owner->id,
             'pet_id' => $pets[1]->id,
             'branch' => 'Mabini Branch',
-            'appointment_date' => $twoHoursLater->toDateString(),
-            'appointment_time' => $twoHoursLater->format('H:i'),
+            'appointment_date' => $tomorrowDate,
+            'appointment_time' => '10:00',
             'status' => Appointment::STATUS_APPROVED,
             'reason' => 'Vaccination',
         ]);
 
-        // Running appointments:send-reminders triggers app-only 1-day & 2-hour reminders without sending SMS
-        $this->artisan('appointments:send-reminders')->assertExitCode(0);
-        $this->assertSame(0, SmsLog::count());
+        // Same-day appointment 2 hours from now (10:00 AM) — should NOT trigger any 2h/3h reminder
+        $sameDayAppt = Appointment::create([
+            'user_id' => $owner->id,
+            'pet_id' => $pets[2]->id,
+            'branch' => 'Mabini Branch',
+            'appointment_date' => $todayDate,
+            'appointment_time' => '10:00',
+            'status' => Appointment::STATUS_APPROVED,
+            'reason' => 'Vaccination',
+        ]);
 
-        $this->assertNotNull($tomorrowAppt->fresh()->reminder_24h_sent_at);
-        $this->assertNotNull($sameDayAppt->fresh()->reminder_3h_sent_at);
-        $this->assertSame(1, AppNotification::where('user_id', $owner->id)->where('type', 'appointment_reminder_24h')->count());
-
-        $urgentNotif = AppNotification::where('user_id', $owner->id)
-            ->where('type', 'appointment_reminder_3h')
-            ->first();
-        $this->assertNotNull($urgentNotif);
-        $this->assertStringContainsString('automatic appointment cancellation after a 1-hour waiting time', $urgentNotif->message);
-        $this->assertTrue((bool) ($urgentNotif->data['is_urgent_2h'] ?? false));
-        $this->assertSame(60, $urgentNotif->data['waiting_time_minutes'] ?? null);
-
-        // Calling /api/notifications does NOT create duplicate reminders
+        // Calling /api/notifications 1 day before dispatches ONLY 1-day reminders (no SMS, no 2h/3h reminders)
         $this->withHeader('Authorization', "Bearer {$token}")
             ->getJson('/api/notifications')
             ->assertStatus(200);
-        $this->assertSame(1, AppNotification::where('user_id', $owner->id)->where('type', 'appointment_reminder_24h')->count());
 
-        // Pet owner confirms attendance on tomorrow's appointment
+        $this->assertSame(0, SmsLog::count());
+        $this->assertNotNull($confirmedTomorrowAppt->fresh()->reminder_24h_sent_at);
+        $this->assertNotNull($ignoredTomorrowAppt->fresh()->reminder_24h_sent_at);
+        $this->assertNull($sameDayAppt->fresh()->reminder_3h_sent_at);
+
+        $this->assertSame(2, AppNotification::where('user_id', $owner->id)->where('type', 'appointment_reminder_24h')->count());
+        $this->assertSame(0, AppNotification::where('user_id', $owner->id)->whereIn('type', ['appointment_reminder_3h', 'appointment_reminder_2h'])->count());
+
+        $reminderNotifs = AppNotification::where('user_id', $owner->id)
+            ->where('type', 'appointment_reminder_24h')
+            ->get();
+
+        foreach ($reminderNotifs as $notif) {
+            $this->assertStringContainsString('after a 12-hour waiting time', $notif->message);
+            $this->assertTrue((bool) ($notif->data['requires_confirmation'] ?? false));
+            $this->assertSame(12, $notif->data['waiting_time_hours'] ?? null);
+        }
+
+        // Calling /api/notifications again or running command does NOT create duplicate 1-day reminders
         $this->withHeader('Authorization', "Bearer {$token}")
-            ->postJson("/api/appointments/{$tomorrowAppt->id}/confirm-attendance")
+            ->getJson('/api/notifications')
+            ->assertStatus(200);
+        $this->artisan('appointments:send-reminders')->assertExitCode(0);
+        $this->assertSame(2, AppNotification::where('user_id', $owner->id)->where('type', 'appointment_reminder_24h')->count());
+        $this->assertSame(0, SmsLog::count());
+
+        // Pet owner confirms attendance on confirmedTomorrowAppt BEFORE the 12-hour waiting time
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson("/api/appointments/{$confirmedTomorrowAppt->id}/confirm-attendance")
             ->assertStatus(200);
 
-        $this->assertNotNull($tomorrowAppt->fresh()->attendance_confirmed_at);
+        $this->assertNotNull($confirmedTomorrowAppt->fresh()->attendance_confirmed_at);
+        $this->assertSame(Appointment::STATUS_APPROVED, $confirmedTomorrowAppt->fresh()->status);
+
+        // Reminder notification for confirmedTomorrowAppt is immediately marked read
+        $confirmedReminderNotif = $reminderNotifs->first(
+            fn ($n) => (int) ($n->data['appointment_id'] ?? 0) === $confirmedTomorrowAppt->id
+        );
+        $this->assertNotNull($confirmedReminderNotif->fresh()->read_at);
+
         $this->assertDatabaseHas('app_notifications', [
             'user_id' => $mabiniStaff->id,
             'type' => 'attendance_confirmed',
         ]);
 
         // Web portal shows Attendance Confirmed badge
-        $this->actingAs($mabiniStaff)->get("/admin/appointments/{$tomorrowAppt->id}")
+        $this->actingAs($mabiniStaff)->get("/admin/appointments/{$confirmedTomorrowAppt->id}")
             ->assertStatus(200)
             ->assertSee('Attendance Confirmed');
 
-        // Simulate ignoring the 2-hour reminder past the 1-hour waiting time (+65 mins)
-        $this->travel(65)->minutes();
+        // Simulate ignoring the 1-day reminder past the 12-hour waiting time (+12 hours 5 mins)
+        $this->travel(12)->hours();
+        $this->travel(5)->minutes();
         $freshToken = JWTAuth::fromUser($owner);
 
         $this->withHeader('Authorization', "Bearer {$freshToken}")
             ->getJson('/api/user/appointments')
             ->assertStatus(200);
 
+        $ignoredTomorrowAppt->refresh();
+        $confirmedTomorrowAppt->refresh();
         $sameDayAppt->refresh();
-        $tomorrowAppt->refresh();
+
+        // Ignored appointment is auto-cancelled and its reminder notification is marked read
+        $this->assertSame(Appointment::STATUS_CANCELLED, $ignoredTomorrowAppt->status);
+        $this->assertStringContainsString('[Auto-Cancelled]', (string) $ignoredTomorrowAppt->notes);
+        $this->assertStringContainsString('12-hour waiting time', (string) $ignoredTomorrowAppt->notes);
+
+        $ignoredReminderNotif = $reminderNotifs->first(
+            fn ($n) => (int) ($n->data['appointment_id'] ?? 0) === $ignoredTomorrowAppt->id
+        );
+        $this->assertNotNull($ignoredReminderNotif->fresh()->read_at);
+
+        // Confirmed appointment remains active
+        $this->assertSame(Appointment::STATUS_APPROVED, $confirmedTomorrowAppt->status);
+
+        // Same-day 10:00 AM appointment whose time (at 8:05 PM Manila) already passed without confirmation is also auto-cancelled
         $this->assertSame(Appointment::STATUS_CANCELLED, $sameDayAppt->status);
-        $this->assertStringContainsString('[Auto-Cancelled]', (string) $sameDayAppt->notes);
-        $this->assertSame(Appointment::STATUS_APPROVED, $tomorrowAppt->status);
+
         $this->assertDatabaseHas('app_notifications', [
             'user_id' => $owner->id,
             'type' => 'appointment_auto_cancelled',
@@ -549,5 +595,19 @@ class CapstoneDefenseRevisionsTest extends TestCase
             'user_id' => $mabiniStaff->id,
             'type' => 'appointment_auto_cancelled',
         ]);
+
+        // Verify Staff portal trigger auto-cancels missed/expired appointments even if pet owner never opens mobile app
+        $missedStaffPortalAppt = Appointment::create([
+            'user_id' => $owner->id,
+            'pet_id' => $pets[2]->id,
+            'branch' => 'Mabini Branch',
+            'appointment_date' => $todayDate,
+            'appointment_time' => '09:00',
+            'status' => Appointment::STATUS_APPROVED,
+            'reason' => 'Diagnostic / Checkup',
+        ]);
+
+        $this->actingAs($mabiniStaff)->get('/admin/appointments')->assertStatus(200);
+        $this->assertSame(Appointment::STATUS_CANCELLED, $missedStaffPortalAppt->fresh()->status);
     }
 }
