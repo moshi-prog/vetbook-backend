@@ -3,16 +3,28 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Mail\AccountApprovedMail;
 use App\Models\Appointment;
 use App\Models\AppNotification;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class PetOwnerController extends Controller
 {
     private const FILTERS = ['all', 'pending', 'new', 'active', 'pets'];
     private const SORTS = ['newest', 'name', 'pets', 'appointments'];
+
+    private function visiblePetOwnersQuery()
+    {
+        return User::where('role', 'pet_owner')
+            ->where(function ($q) {
+                $q->whereNotNull('email_verified_at')
+                  ->orWhere('approval_status', '!=', 'pending')
+                  ->orWhereNull('approval_status');
+            });
+    }
 
     public function index(Request $request)
     {
@@ -45,10 +57,10 @@ class PetOwnerController extends Controller
             $q->whereBetween('appointment_date', [$monthStart->toDateString(), $monthEnd->toDateString()]);
         };
 
-        // Base: all registered pet owners across the clinic
-        $base = User::where('role', 'pet_owner');
+        // Base: visible pet owners (excludes unverified pending registrations until OTP verification)
+        $base = $this->visiblePetOwnersQuery();
 
-        // Stats (scoped to the admin's visible owners, consolidated to 1 single DB query)
+        // Stats (scoped to visible owners, consolidated to 1 single DB query)
         $mS = $monthStart->copy()->startOfDay()->toDateTimeString();
         $mE = $monthEnd->copy()->endOfDay()->toDateTimeString();
         $mSDate = $monthStart->toDateString();
@@ -61,7 +73,7 @@ class PetOwnerController extends Controller
         $statsRow = \Illuminate\Support\Facades\DB::selectOne("
             SELECT 
                 COUNT(*) as total,
-                COUNT(CASE WHEN approval_status = 'pending' THEN 1 END) as pending_approval,
+                COUNT(CASE WHEN approval_status = 'pending' AND email_verified_at IS NOT NULL THEN 1 END) as pending_approval,
                 COUNT(CASE WHEN created_at BETWEEN ? AND ? THEN 1 END) as new_this_month,
                 COUNT(CASE WHEN EXISTS (
                     SELECT 1 FROM appointments a 
@@ -72,6 +84,7 @@ class PetOwnerController extends Controller
                 COUNT(CASE WHEN (SELECT COUNT(*) FROM pets p WHERE p.user_id = users.id) >= 2 THEN 1 END) as multi_pets
             FROM users
             WHERE role = 'pet_owner'
+              AND (email_verified_at IS NOT NULL OR approval_status IS NULL OR approval_status != 'pending')
         ", $bindings);
 
         $stats = [
@@ -99,7 +112,7 @@ class PetOwnerController extends Controller
 
         switch ($filter) {
             case 'pending':
-                $query->where('approval_status', 'pending');
+                $query->where('approval_status', 'pending')->whereNotNull('email_verified_at');
                 break;
             case 'new':
                 $query->whereBetween('created_at', [$monthStart->copy()->startOfDay(), $monthEnd->copy()->endOfDay()]);
@@ -208,7 +221,15 @@ class PetOwnerController extends Controller
             \Log::warning('Failed creating account approved notification: ' . $e->getMessage());
         }
 
-        return back()->with('success', "Pet owner account for {$owner->name} has been approved.");
+        if (config('mail.default') !== 'log' && !empty($owner->email)) {
+            try {
+                Mail::to($owner->email)->send(new AccountApprovedMail($owner->name));
+            } catch (\Throwable $e) {
+                \Log::error('Failed sending account approved email: ' . $e->getMessage());
+            }
+        }
+
+        return back()->with('success', "Pet owner account for {$owner->name} has been approved and an approval email has been sent.");
     }
 
     public function reject($id)
@@ -285,7 +306,7 @@ class PetOwnerController extends Controller
         $filter = $request->input('filter', 'all');
         $sort = $request->input('sort', 'newest');
 
-        $query = User::where('role', 'pet_owner')->withCount(['pets', 'appointments']);
+        $query = $this->visiblePetOwnersQuery()->withCount(['pets', 'appointments']);
 
         if ($request->filled('ids')) {
             $ids = is_array($request->ids) ? $request->ids : explode(',', (string) $request->ids);

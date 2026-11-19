@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Mail\AccountApprovedMail;
+use App\Mail\AccountPendingApprovalMail;
 use App\Mail\VerifyEmailCodeMail;
+use App\Models\AppNotification;
 use App\Models\EmailVerificationCode;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -273,6 +276,71 @@ class EmailVerificationTest extends TestCase
 
         $user->refresh();
         $this->assertNull($user->email_verified_at);
+    }
+
+    public function test_pending_owner_verifying_otp_dispatches_pending_email_and_handles_double_submit(): void
+    {
+        Mail::fake();
+
+        $staff = User::create([
+            'name' => 'Mabini Staff',
+            'email' => 'staff.otp@vetbook.test',
+            'password' => Hash::make('password123'),
+            'role' => 'admin',
+            'branch' => 'Mabini Branch',
+        ]);
+
+        $this->postJson('/api/register', [
+            'name'                  => 'Ana Reyes',
+            'email'                 => 'Ana.Reyes@Example.com',
+            'password'              => 'password123',
+            'password_confirmation' => 'password123',
+            'phone_number'          => '09176665544',
+        ])->assertStatus(201);
+
+        // Staff has zero approval notifications while email is unverified
+        $this->assertSame(0, AppNotification::where('user_id', $staff->id)->where('type', 'account_approval_needed')->count());
+        $this->actingAs($staff)->get('/admin/pet-owners?filter=pending')
+            ->assertStatus(200)
+            ->assertDontSee('Ana Reyes');
+
+        $code = EmailVerificationCode::where('email', 'ana.reyes@example.com')->value('code');
+        $this->assertNotEmpty($code);
+
+        // Verify OTP (with mixed-case email) -> sends Email #1 & notifies Staff
+        $this->postJson('/api/verify-email', [
+            'email' => 'Ana.Reyes@Example.com',
+            'code'  => $code,
+        ])->assertStatus(200)
+            ->assertJson([
+                'approval_status'        => 'pending',
+                'pending_staff_approval' => true,
+            ]);
+
+        Mail::assertSent(AccountPendingApprovalMail::class, fn ($mail) => $mail->hasTo('ana.reyes@example.com'));
+        $this->assertSame(1, AppNotification::where('user_id', $staff->id)->where('type', 'account_approval_needed')->count());
+
+        // Double-submit same OTP returns 200 pending_staff_approval cleanly without duplicate notification or error
+        $this->postJson('/api/verify-email', [
+            'email' => 'ana.reyes@example.com',
+            'code'  => $code,
+        ])->assertStatus(200)
+            ->assertJson([
+                'approval_status'        => 'pending',
+                'pending_staff_approval' => true,
+            ]);
+        $this->assertSame(1, AppNotification::where('user_id', $staff->id)->where('type', 'account_approval_needed')->count());
+
+        // Now Staff sees Ana Reyes in Pending Approval and approves -> sends Email #2
+        $owner = User::where('email', 'ana.reyes@example.com')->firstOrFail();
+        $this->actingAs($staff)->get('/admin/pet-owners?filter=pending')
+            ->assertStatus(200)
+            ->assertSee('Ana Reyes');
+
+        $this->actingAs($staff)->post("/admin/pet-owners/{$owner->id}/approve")
+            ->assertRedirect();
+
+        Mail::assertSent(AccountApprovedMail::class, fn ($mail) => $mail->hasTo('ana.reyes@example.com'));
     }
 }
 

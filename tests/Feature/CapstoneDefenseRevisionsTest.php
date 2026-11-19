@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Mail\AccountApprovedMail;
+use App\Mail\AccountPendingApprovalMail;
 use App\Models\AppNotification;
 use App\Models\Appointment;
 use App\Models\EmailVerificationCode;
@@ -60,8 +62,15 @@ class CapstoneDefenseRevisionsTest extends TestCase
 
         $mabiniStaff = $this->createStaff('Mabini Branch');
         $batangasStaff = $this->createStaff('Batangas City Branch');
+        $systemAdmin = User::create([
+            'name' => 'System Admin',
+            'email' => uniqid('sysadmin_', true) . '@vetbook.test',
+            'password' => bcrypt('password123'),
+            'role' => 'admin',
+            'branch' => null,
+        ]);
 
-        // 1. Register pet owner (defaults to pending staff approval)
+        // 1. Register pet owner (defaults to pending staff approval, unverified email)
         $reg = $this->postJson('/api/register', [
             'name' => 'Juan Pending',
             'email' => 'juan.pending@example.com',
@@ -73,18 +82,21 @@ class CapstoneDefenseRevisionsTest extends TestCase
         $reg->assertStatus(201);
         $owner = User::where('email', 'juan.pending@example.com')->firstOrFail();
         $this->assertSame('pending', $owner->approval_status);
+        $this->assertNull($owner->email_verified_at);
 
-        // Staff received notification
-        $this->assertDatabaseHas('app_notifications', [
-            'user_id' => $mabiniStaff->id,
-            'type' => 'account_approval_needed',
-        ]);
-        $this->assertDatabaseHas('app_notifications', [
-            'user_id' => $batangasStaff->id,
-            'type' => 'account_approval_needed',
-        ]);
+        // Before email verification: Staff has 0 notifications and Juan Pending is hidden from Pet Owners & Dashboard
+        $this->assertSame(0, AppNotification::where('type', 'account_approval_needed')->count());
+        $this->actingAs($mabiniStaff)->get('/admin/pet-owners')
+            ->assertStatus(200)
+            ->assertDontSee('Juan Pending');
+        $this->actingAs($mabiniStaff)->get('/admin/pet-owners?filter=pending')
+            ->assertStatus(200)
+            ->assertDontSee('Juan Pending');
+        $this->actingAs($systemAdmin)->get('/admin')
+            ->assertStatus(200)
+            ->assertDontSee('Juan Pending');
 
-        // Verify email succeeds while signaling pending_staff_approval
+        // Verify email succeeds while signaling pending_staff_approval and sending Email #1
         $code = EmailVerificationCode::where('email', 'juan.pending@example.com')->value('code');
         $verify = $this->postJson('/api/verify-email', [
             'email' => 'juan.pending@example.com',
@@ -96,6 +108,30 @@ class CapstoneDefenseRevisionsTest extends TestCase
                 'pending_staff_approval' => true,
             ]);
 
+        Mail::assertSent(AccountPendingApprovalMail::class, function ($mail) {
+            return $mail->hasTo('juan.pending@example.com');
+        });
+
+        // Re-submitting the same OTP code while already verified + pending returns 200 cleanly (no false 400)
+        $this->postJson('/api/verify-email', [
+            'email' => 'juan.pending@example.com',
+            'code' => $code,
+        ])->assertStatus(200)
+            ->assertJson([
+                'approval_status' => 'pending',
+                'pending_staff_approval' => true,
+            ]);
+
+        // NOW Staff received approval-needed notifications
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $mabiniStaff->id,
+            'type' => 'account_approval_needed',
+        ]);
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $batangasStaff->id,
+            'type' => 'account_approval_needed',
+        ]);
+
         // Unapproved login with enforce_staff_approval is blocked with 403
         $blockedLogin = $this->postJson('/api/login', [
             'email' => 'juan.pending@example.com',
@@ -105,16 +141,24 @@ class CapstoneDefenseRevisionsTest extends TestCase
         $blockedLogin->assertStatus(403)
             ->assertJson(['pending_staff_approval' => true]);
 
-        // Staff filters Pending Approval and sees Juan Pending
+        // Staff filters Pending Approval and sees Juan Pending (and Admin dashboard shows verified pending owner)
         $pendingPage = $this->actingAs($mabiniStaff)->get('/admin/pet-owners?filter=pending');
         $pendingPage->assertStatus(200)
             ->assertSee('Juan Pending')
             ->assertSee('Pending Staff Approval')
             ->assertSee('Approve Account');
 
-        // Staff approves account
+        $this->actingAs($systemAdmin)->get('/admin')
+            ->assertStatus(200)
+            ->assertSee('Juan Pending');
+
+        // Staff approves account -> sends Email #2
         $this->actingAs($mabiniStaff)->post("/admin/pet-owners/{$owner->id}/approve")
             ->assertRedirect();
+
+        Mail::assertSent(AccountApprovedMail::class, function ($mail) {
+            return $mail->hasTo('juan.pending@example.com');
+        });
 
         $owner->refresh();
         $this->assertSame('approved', $owner->approval_status);

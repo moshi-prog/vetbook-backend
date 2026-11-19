@@ -15,14 +15,22 @@ class DashboardController extends Controller
         $user = auth()->user();
         $branch = $user->branch; // null = Admin (Account Management), non-null = Staff branch
 
+        $visibleOwnerFilter = function ($q) {
+            $q->whereNotNull('email_verified_at')
+              ->orWhere('approval_status', '!=', 'pending')
+              ->orWhereNull('approval_status');
+        };
+
         if ($branch === null) {
             $adminAccounts = User::where('role', 'admin')->orderBy('id')->get();
             $staffCount = $adminAccounts->whereNotNull('branch')->count();
-            $totalPetOwners = User::where('role', 'pet_owner')->count();
+            $totalPetOwners = User::where('role', 'pet_owner')->where($visibleOwnerFilter)->count();
             $newOwnersThisMonth = User::where('role', 'pet_owner')
+                ->where($visibleOwnerFilter)
                 ->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])
                 ->count();
             $recentPetOwners = User::where('role', 'pet_owner')
+                ->where($visibleOwnerFilter)
                 ->orderByDesc('created_at')
                 ->limit(8)
                 ->get();
@@ -48,7 +56,7 @@ class DashboardController extends Controller
         // Base queries with optional branch filter
         $appointmentsQuery = Appointment::query();
         $petsQuery = Pet::query();
-        $usersQuery = User::where('role', 'pet_owner');
+        $usersQuery = User::where('role', 'pet_owner')->where($visibleOwnerFilter);
 
         if ($branch) {
             $appointmentsQuery->where('branch', $branch);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\AccountPendingApprovalMail;
 use App\Mail\PasswordResetMail;
 use App\Mail\VerifyEmailCodeMail;
 use App\Models\AppNotification;
@@ -94,23 +95,6 @@ class AuthController extends Controller
             ]);
         }
 
-        if ($user->approval_status === 'pending') {
-            try {
-                $staffUsers = User::where('role', 'admin')->whereNotNull('branch')->get();
-                foreach ($staffUsers as $staff) {
-                    AppNotification::create([
-                        'user_id' => $staff->id,
-                        'title'   => 'New Pet Owner Registration',
-                        'message' => "{$user->name} ({$user->email}) registered and is awaiting staff account approval.",
-                        'type'    => 'account_approval_needed',
-                        'data'    => ['pet_owner_id' => $user->id],
-                    ]);
-                }
-            } catch (\Throwable $e) {
-                \Log::warning('Failed creating staff approval notification: ' . $e->getMessage());
-            }
-        }
-
         // Generate fresh 6-digit code
         $code = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
 
@@ -169,19 +153,31 @@ class AuthController extends Controller
         $email = strtolower(trim($request->email));
         $code = trim((string) $request->code);
 
-        $codeRecord = EmailVerificationCode::where('email', $email)
+        $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
+
+        $codeRecord = EmailVerificationCode::whereRaw('LOWER(email) = ?', [$email])
             ->where('code', $code)
             ->where('expires_at', '>=', now())
             ->first();
 
         $isDemoBypass = config('mail.default') === 'log' && $code === '123456';
         if (!$codeRecord && !$isDemoBypass) {
+            if ($user && $user->email_verified_at !== null && ($user->approval_status ?? 'approved') === 'pending') {
+                $token = JWTAuth::fromUser($user);
+
+                return response()->json([
+                    'message'                => 'Your email is already verified! Please wait for clinic staff approval.',
+                    'token'                  => $token,
+                    'user'                   => $user,
+                    'approval_status'        => 'pending',
+                    'pending_staff_approval' => true,
+                ], 200);
+            }
+
             return response()->json([
                 'message' => 'Invalid or expired verification code.',
             ], 400);
         }
-
-        $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
 
         if (!$user) {
             return response()->json([
@@ -189,14 +185,42 @@ class AuthController extends Controller
             ], 404);
         }
 
-        $user->email_verified_at = now();
-        $user->save();
+        $wasUnverified = $user->email_verified_at === null;
+        if ($wasUnverified) {
+            $user->email_verified_at = now();
+            $user->save();
+        }
 
         // Invalidate used code
-        EmailVerificationCode::where('email', $email)->delete();
+        EmailVerificationCode::whereRaw('LOWER(email) = ?', [$email])->delete();
 
         $token = JWTAuth::fromUser($user);
         $approvalStatus = $user->approval_status ?? 'approved';
+
+        if ($wasUnverified && $approvalStatus === 'pending') {
+            try {
+                $staffUsers = User::where('role', 'admin')->whereNotNull('branch')->get();
+                foreach ($staffUsers as $staff) {
+                    AppNotification::create([
+                        'user_id' => $staff->id,
+                        'title'   => 'New Pet Owner Registration',
+                        'message' => "{$user->name} ({$user->email}) verified their email and is awaiting staff account approval.",
+                        'type'    => 'account_approval_needed',
+                        'data'    => ['pet_owner_id' => $user->id],
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('Failed creating staff approval notification: ' . $e->getMessage());
+            }
+
+            if (config('mail.default') !== 'log') {
+                try {
+                    Mail::to($user->email)->send(new AccountPendingApprovalMail($user->name));
+                } catch (\Throwable $e) {
+                    \Log::error('Failed to send pending approval email: ' . $e->getMessage());
+                }
+            }
+        }
 
         return response()->json([
             'message'                => 'Email verified successfully. Welcome to VetBook!',
