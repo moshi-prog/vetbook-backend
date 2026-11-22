@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Appointment;
 use App\Models\AppNotification;
+use App\Models\ClinicSetting;
 use App\Models\Pet;
 use App\Models\User;
 use App\Services\BranchCapacityService;
@@ -126,7 +127,7 @@ class AppointmentController extends Controller
             'pet_ids'             => 'nullable|array|min:1|required_without:pet_id',
             'pet_ids.*'           => 'integer|exists:pets,id',
             'branch'              => ['required', 'string', Rule::in(self::BRANCHES)],
-            'appointment_date'    => $isSurgery ? 'nullable|date' : 'required|date|after_or_equal:today',
+            'appointment_date'    => $isSurgery ? 'nullable|date' : 'required|date',
             'appointment_time'    => $isSurgery ? 'nullable|string|max:20' : 'required|string|date_format:H:i',
             'service_type'        => 'nullable|string|max:100',
             'reason'              => 'nullable|string|max:255',
@@ -142,11 +143,35 @@ class AppointmentController extends Controller
             ], 400);
         }
 
-        $dateCarbon = !$isSurgery ? Carbon::parse($request->appointment_date) : null;
-        if (!$isSurgery && ($request->boolean('disallow_same_day', false) || $request->has('service_type')) && $dateCarbon->copy()->startOfDay()->lte(Carbon::today())) {
-            return response()->json([
-                'message' => 'Same-day appointments are not allowed. Please book at least 1 day in advance (tomorrow onwards).',
-            ], 422);
+        $tz = ClinicSetting::get('pref_timezone', 'Asia/Manila') ?: 'Asia/Manila';
+        $nowTz = Carbon::now($tz);
+        $todayTz = $nowTz->copy()->startOfDay();
+        $isMabini = stripos((string) $request->branch, 'mabini') !== false;
+
+        $dateCarbon = null;
+        if (!$isSurgery) {
+            $dateCarbon = Carbon::parse($request->appointment_date, $tz)->startOfDay();
+
+            if ($dateCarbon->lt($todayTz)) {
+                return response()->json([
+                    'message' => 'Cannot book an appointment in the past. Please choose a valid date.',
+                ], 422);
+            }
+
+            if (!$isMabini && ($request->boolean('disallow_same_day', false) || $request->has('service_type')) && $dateCarbon->lte($todayTz)) {
+                return response()->json([
+                    'message' => 'Same-day appointments are not allowed for Batangas City Branch. Please book at least 1 day in advance (tomorrow onwards).',
+                ], 422);
+            }
+
+            if ($isMabini && $dateCarbon->isSameDay($todayTz)) {
+                $requestedDateTimeTz = Carbon::parse($dateCarbon->toDateString() . ' ' . $request->appointment_time, $tz);
+                if ($requestedDateTimeTz->lte($nowTz)) {
+                    return response()->json([
+                        'message' => 'This time slot has already passed today. Please choose an upcoming time slot.',
+                    ], 422);
+                }
+            }
         }
 
         $rawPetIds = $request->filled('pet_ids')

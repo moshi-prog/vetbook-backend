@@ -335,14 +335,21 @@ class CapstoneDefenseRevisionsTest extends TestCase
 
     public function test_same_day_booking_is_rejected_when_service_booking_rules_apply(): void
     {
-        [$owner, $pets] = $this->createApprovedOwnerWithPets(1);
+        $manilaMorning = Carbon::now('Asia/Manila')->startOfDay()->setHour(9);
+        $this->travelTo($manilaMorning->copy()->utc());
+
+        [$owner, $pets] = $this->createApprovedOwnerWithPets(2);
         $token = JWTAuth::fromUser($owner);
 
+        $todayStr = $manilaMorning->toDateString();
+        $tomorrowStr = $manilaMorning->copy()->addDay()->toDateString();
+
+        // 1. Batangas City Branch rejects same-day booking (422), allows tomorrow onwards (201)
         $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson('/api/appointments', [
                 'pet_id' => $pets[0]->id,
-                'branch' => 'Mabini Branch',
-                'appointment_date' => now()->toDateString(),
+                'branch' => 'Batangas City Branch',
+                'appointment_date' => $todayStr,
                 'appointment_time' => '15:00',
                 'service_type' => 'Diagnostic / Checkup',
                 'disallow_same_day' => true,
@@ -350,17 +357,46 @@ class CapstoneDefenseRevisionsTest extends TestCase
             ])
             ->assertStatus(422)
             ->assertJsonFragment([
-                'message' => 'Same-day appointments are not allowed. Please book at least 1 day in advance (tomorrow onwards).',
+                'message' => 'Same-day appointments are not allowed for Batangas City Branch. Please book at least 1 day in advance (tomorrow onwards).',
             ]);
 
         $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson('/api/appointments', [
                 'pet_id' => $pets[0]->id,
-                'branch' => 'Mabini Branch',
-                'appointment_date' => Carbon::tomorrow()->toDateString(),
+                'branch' => 'Batangas City Branch',
+                'appointment_date' => $tomorrowStr,
                 'appointment_time' => '10:00',
                 'service_type' => 'Diagnostic / Checkup',
                 'disallow_same_day' => true,
+                'reason' => 'Diagnostic / Checkup',
+            ])
+            ->assertStatus(201);
+
+        // 2. Mabini Branch rejects a PAST slot today (08:30 at 09:00 AM Manila -> 422)
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets[1]->id,
+                'branch' => 'Mabini Branch',
+                'appointment_date' => $todayStr,
+                'appointment_time' => '08:30',
+                'service_type' => 'Diagnostic / Checkup',
+                'disallow_same_day' => false,
+                'reason' => 'Diagnostic / Checkup',
+            ])
+            ->assertStatus(422)
+            ->assertJsonFragment([
+                'message' => 'This time slot has already passed today. Please choose an upcoming time slot.',
+            ]);
+
+        // 3. Mabini Branch allows an UPCOMING same-day slot today (15:00 at 09:00 AM Manila -> 201)
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets[1]->id,
+                'branch' => 'Mabini Branch',
+                'appointment_date' => $todayStr,
+                'appointment_time' => '15:00',
+                'service_type' => 'Diagnostic / Checkup',
+                'disallow_same_day' => false,
                 'reason' => 'Diagnostic / Checkup',
             ])
             ->assertStatus(201);
@@ -581,7 +617,7 @@ class CapstoneDefenseRevisionsTest extends TestCase
             'reason' => 'Vaccination',
         ]);
 
-        // Same-day appointment 2 hours from now (10:00 AM) — should NOT trigger any 2h/3h reminder
+        // Advance booking created yesterday for today 10:00 AM — must NOT trigger the 3h same-day reminder
         $sameDayAppt = Appointment::create([
             'user_id' => $owner->id,
             'pet_id' => $pets[2]->id,
@@ -591,6 +627,9 @@ class CapstoneDefenseRevisionsTest extends TestCase
             'status' => Appointment::STATUS_APPROVED,
             'reason' => 'Vaccination',
         ]);
+        $sameDayAppt->forceFill([
+            'created_at' => $manilaNow->copy()->subDay()->utc(),
+        ])->save();
 
         // Calling /api/notifications 1 day before dispatches ONLY 1-day reminders (no SMS, no 2h/3h reminders)
         $this->withHeader('Authorization', "Bearer {$token}")
@@ -864,5 +903,133 @@ class CapstoneDefenseRevisionsTest extends TestCase
                 'service_type' => 'Grooming',
                 'reason' => 'Grooming',
             ])->assertStatus(409);
+    }
+
+    public function test_same_day_mabini_booking_sends_3h_reminder_and_auto_cancels_after_2h_waiting_time(): void
+    {
+        $manila9am = Carbon::now('Asia/Manila')->startOfDay()->setHour(9);
+        $this->travelTo($manila9am->copy()->utc());
+
+        $mabiniStaff = $this->createStaff('Mabini Branch');
+        [$owner, $pets] = $this->createApprovedOwnerWithPets(3);
+        $token = JWTAuth::fromUser($owner);
+        $todayStr = $manila9am->toDateString();
+
+        // Book two same-day Mabini Branch appointments for 4:00 PM / 3:30 PM (6.5–7 hours away) via API
+        $res1 = $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets[0]->id,
+                'branch' => 'Mabini Branch',
+                'appointment_date' => $todayStr,
+                'appointment_time' => '16:00',
+                'service_type' => 'Vaccination',
+                'disallow_same_day' => false,
+                'reason' => 'Vaccination',
+            ]);
+        $res1->assertStatus(201);
+        $confirmedSameDayAppt = Appointment::findOrFail($res1->json('appointment.id'));
+
+        $res2 = $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets[1]->id,
+                'branch' => 'Mabini Branch',
+                'appointment_date' => $todayStr,
+                'appointment_time' => '15:30',
+                'service_type' => 'Diagnostic / Checkup',
+                'disallow_same_day' => false,
+                'reason' => 'Diagnostic / Checkup',
+            ]);
+        $res2->assertStatus(201);
+        $ignoredSameDayAppt = Appointment::findOrFail($res2->json('appointment.id'));
+
+        // Advance booking created yesterday for today at 4:00 PM (with 24h reminder already sent) MUST NOT get 3h reminder
+        $advanceTodayAppt = Appointment::create([
+            'user_id' => $owner->id,
+            'pet_id' => $pets[2]->id,
+            'branch' => 'Batangas City Branch',
+            'appointment_date' => $todayStr,
+            'appointment_time' => '16:00',
+            'status' => Appointment::STATUS_APPROVED,
+            'reason' => 'Vaccination',
+            'reminder_24h_sent_at' => $manila9am->copy()->subDay()->utc(),
+        ]);
+        $advanceTodayAppt->forceFill([
+            'created_at' => $manila9am->copy()->subDay()->utc(),
+        ])->save();
+
+        // At 09:00 AM (7 hours before 16:00) -> 0 same-day 3h reminders yet
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/notifications')
+            ->assertStatus(200);
+
+        $this->assertSame(0, AppNotification::where('user_id', $owner->id)->where('type', 'appointment_reminder_3h')->count());
+        $this->assertNull($confirmedSameDayAppt->fresh()->reminder_3h_sent_at);
+        $this->assertNull($ignoredSameDayAppt->fresh()->reminder_3h_sent_at);
+
+        // Travel to 13:00 (1:00 PM Asia/Manila) — 3 hours before 16:00
+        $this->travelTo($manila9am->copy()->setHour(13)->utc());
+        $token1pm = JWTAuth::fromUser($owner);
+
+        $this->withHeader('Authorization', "Bearer {$token1pm}")
+            ->getJson('/api/notifications')
+            ->assertStatus(200);
+
+        $this->assertSame(0, SmsLog::count());
+        $this->assertNotNull($confirmedSameDayAppt->fresh()->reminder_3h_sent_at);
+        $this->assertNotNull($ignoredSameDayAppt->fresh()->reminder_3h_sent_at);
+        $this->assertNull($advanceTodayAppt->fresh()->reminder_3h_sent_at);
+
+        $notifs3h = AppNotification::where('user_id', $owner->id)
+            ->where('type', 'appointment_reminder_3h')
+            ->get();
+        $this->assertCount(2, $notifs3h);
+
+        foreach ($notifs3h as $notif) {
+            $this->assertStringContainsString('after a 2-hour waiting time', $notif->message);
+            $this->assertTrue((bool) ($notif->data['requires_confirmation'] ?? false));
+            $this->assertSame(2, $notif->data['waiting_time_hours'] ?? null);
+        }
+
+        // Confirm attendance on appointment #1 -> attendance_confirmed_at set and reminder marked read
+        $this->withHeader('Authorization', "Bearer {$token1pm}")
+            ->postJson("/api/appointments/{$confirmedSameDayAppt->id}/confirm-attendance")
+            ->assertStatus(200);
+
+        $confirmedSameDayAppt->refresh();
+        $this->assertNotNull($confirmedSameDayAppt->attendance_confirmed_at);
+
+        $confirmedNotif = $notifs3h->first(
+            fn ($n) => (int) ($n->data['appointment_id'] ?? 0) === $confirmedSameDayAppt->id
+        );
+        $this->assertNotNull($confirmedNotif->fresh()->read_at);
+
+        // Travel +2h 5m to 15:05 PM Asia/Manila (STILL before 15:30/16:00, past the 2-hour waiting time)
+        $this->travelTo($manila9am->copy()->setHour(15)->setMinute(5)->utc());
+        $token3pm = JWTAuth::fromUser($owner);
+
+        $this->withHeader('Authorization', "Bearer {$token3pm}")
+            ->getJson('/api/user/appointments')
+            ->assertStatus(200);
+
+        $confirmedSameDayAppt->refresh();
+        $ignoredSameDayAppt->refresh();
+
+        $this->assertSame(Appointment::STATUS_PENDING, $confirmedSameDayAppt->status);
+        $this->assertSame(Appointment::STATUS_CANCELLED, $ignoredSameDayAppt->status);
+        $this->assertStringContainsString('2-hour waiting time', (string) $ignoredSameDayAppt->notes);
+
+        $ignoredNotif = $notifs3h->first(
+            fn ($n) => (int) ($n->data['appointment_id'] ?? 0) === $ignoredSameDayAppt->id
+        );
+        $this->assertNotNull($ignoredNotif->fresh()->read_at);
+
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $owner->id,
+            'type'    => 'appointment_auto_cancelled',
+        ]);
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $mabiniStaff->id,
+            'type'    => 'appointment_auto_cancelled',
+        ]);
     }
 }

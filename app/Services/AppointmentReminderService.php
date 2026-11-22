@@ -17,8 +17,26 @@ class AppointmentReminderService
     ];
 
     /**
+     * Determine whether an appointment was booked same-day (created_at matches appointment_date in clinic TZ)
+     * and did not previously receive a 1-day advance reminder.
+     */
+    private static function isSameDayBooking(Appointment $appointment, string $tz): bool
+    {
+        if ($appointment->appointment_date === null || $appointment->created_at === null) {
+            return false;
+        }
+
+        if ($appointment->reminder_24h_sent_at !== null) {
+            return false;
+        }
+
+        return Carbon::parse($appointment->appointment_date)->toDateString()
+            === $appointment->created_at->copy()->timezone($tz)->toDateString();
+    }
+
+    /**
      * Auto-cancel expired/ignored appointments, clear stale reminder notifications,
-     * and dispatch app-only 1-day (24-hour) appointment reminders.
+     * and dispatch app-only 1-day (advance) and 3-hour (same-day) appointment reminders.
      */
     public static function dispatchDueReminders(?int $userId = null): array
     {
@@ -31,7 +49,7 @@ class AppointmentReminderService
         // Step B: Clean up stale unread reminder notifications for finalized/confirmed/missing appointments
         self::cleanupStaleReminderNotifications($userId);
 
-        // Step C: Dispatch ONLY the 1-Day (24-Hour) before reminder
+        // Step C: Dispatch 1-Day (24-Hour) before reminder for tomorrow's appointments
         $sent24h = 0;
         $tomorrowDateStr = $nowTz->copy()->addDay()->toDateString();
 
@@ -69,8 +87,63 @@ class AppointmentReminderService
             $sent24h++;
         }
 
+        // Step D: Dispatch 3-Hour Same-Day Reminder (app-only, no SMS) for today's same-day appointments
+        $sent3h = 0;
+        $todayDateStr = $nowTz->toDateString();
+
+        $todayQuery = Appointment::with(['pet', 'user'])
+            ->whereNotNull('appointment_date')
+            ->whereDate('appointment_date', $todayDateStr)
+            ->whereIn('status', [Appointment::STATUS_PENDING, Appointment::STATUS_APPROVED])
+            ->whereNull('reminder_24h_sent_at')
+            ->whereNull('reminder_3h_sent_at')
+            ->whereNull('attendance_confirmed_at');
+
+        if ($userId !== null) {
+            $todayQuery->where('user_id', $userId);
+        }
+
+        foreach ($todayQuery->get() as $appointment) {
+            if (!self::isSameDayBooking($appointment, $tz)) {
+                continue;
+            }
+
+            $rawTime = trim((string) ($appointment->appointment_time ?? ''));
+            if ($rawTime === '' || strtoupper($rawTime) === 'ON_CALL') {
+                continue;
+            }
+
+            try {
+                $apptDateTime = Carbon::parse($todayDateStr . ' ' . $rawTime, $tz);
+            } catch (\Throwable $e) {
+                continue;
+            }
+
+            if (!$apptDateTime->gt($nowTz) || !$nowTz->gte($apptDateTime->copy()->subHours(3))) {
+                continue;
+            }
+
+            $petName = $appointment->pet?->name ?? 'your pet';
+            $formattedDate = Carbon::parse($appointment->appointment_date)->format('M d, Y');
+            $formattedTime = Appointment::format12Hour($appointment->appointment_time);
+
+            $title = 'Same-Day Appointment in 3 Hours — Will You Continue?';
+            $message = "Reminder: {$petName} has a same-day appointment today ({$formattedDate} at {$formattedTime}) at {$appointment->branch}. Will your appointment still continue? Ignoring this reminder will automatically cancel and remove your appointment after a 2-hour waiting time.";
+
+            self::notifyOwner($appointment, $title, $message, 'appointment_reminder_3h', [
+                'waiting_time_hours' => 2,
+                'cancel_deadline_at' => now()->addHours(2)->toIso8601String(),
+                'is_same_day'        => true,
+            ]);
+
+            $appointment->reminder_3h_sent_at = now();
+            $appointment->save();
+            $sent3h++;
+        }
+
         return [
             'sent_24h'       => $sent24h,
+            'sent_3h'        => $sent3h,
             'auto_cancelled' => $autoCancelled,
         ];
     }
@@ -165,6 +238,7 @@ class AppointmentReminderService
         $nowTz = Carbon::now($tz);
         $todayTzStr = $nowTz->toDateString();
         $twelveHoursAgo = now()->subHours(12);
+        $twoHoursAgo = now()->subHours(2);
         $cancelled = 0;
 
         foreach ($query->get() as $appointment) {
@@ -174,6 +248,9 @@ class AppointmentReminderService
 
             $expiredBy12h = $appointment->reminder_24h_sent_at !== null
                 && $appointment->reminder_24h_sent_at->lte($twelveHoursAgo);
+
+            $expiredBy2h = $appointment->reminder_3h_sent_at !== null
+                && $appointment->reminder_3h_sent_at->lte($twoHoursAgo);
 
             $expiredByMissedTime = false;
             $rawTime = trim((string) ($appointment->appointment_time ?? ''));
@@ -200,16 +277,12 @@ class AppointmentReminderService
                 }
             }
 
-            if (!$expiredBy12h && !$expiredByMissedTime) {
+            if (!$expiredBy12h && !$expiredBy2h && !$expiredByMissedTime) {
                 continue;
             }
 
-            $tag = '[Auto-Cancelled] Appointment automatically cancelled and removed after the 12-hour waiting time expired without confirmation.';
-            $appointment->status = Appointment::STATUS_CANCELLED;
-            $appointment->notes = $appointment->notes ? ($appointment->notes . "\n\n" . $tag) : $tag;
-            $appointment->save();
-
-            self::markReminderNotificationsReadForAppointment((int) $appointment->id);
+            $isTwoHourExpiry = $expiredBy2h
+                || ($expiredByMissedTime && self::isSameDayBooking($appointment, $tz) && $appointment->reminder_3h_sent_at !== null);
 
             $petName = $appointment->pet?->name ?? 'your pet';
             $ownerName = $appointment->user?->name ?? 'Pet Owner';
@@ -221,7 +294,22 @@ class AppointmentReminderService
                 : Appointment::format12Hour($appointment->appointment_time);
 
             $ownerTitle = 'Appointment Automatically Cancelled';
-            $ownerMessage = "Your appointment for {$petName} on {$formattedDate} at {$formattedTime} was automatically cancelled and removed because the 1-day reminder was ignored past the 12-hour waiting time.";
+
+            if ($isTwoHourExpiry) {
+                $tag = '[Auto-Cancelled] Same-day appointment automatically cancelled and removed after the 2-hour waiting time expired without confirmation.';
+                $ownerMessage = "Your same-day appointment for {$petName} on {$formattedDate} at {$formattedTime} was automatically cancelled and removed because the 3-hour reminder was ignored past the 2-hour waiting time.";
+                $staffMessage = "{$ownerName}'s same-day appointment for {$petName} on {$formattedDate} at {$formattedTime} was auto-cancelled because the 3-hour reminder was ignored beyond the 2-hour waiting time.";
+            } else {
+                $tag = '[Auto-Cancelled] Appointment automatically cancelled and removed after the 12-hour waiting time expired without confirmation.';
+                $ownerMessage = "Your appointment for {$petName} on {$formattedDate} at {$formattedTime} was automatically cancelled and removed because the 1-day reminder was ignored past the 12-hour waiting time.";
+                $staffMessage = "{$ownerName}'s appointment for {$petName} on {$formattedDate} at {$formattedTime} was auto-cancelled because the 1-day reminder was ignored beyond the 12-hour waiting time.";
+            }
+
+            $appointment->status = Appointment::STATUS_CANCELLED;
+            $appointment->notes = $appointment->notes ? ($appointment->notes . "\n\n" . $tag) : $tag;
+            $appointment->save();
+
+            self::markReminderNotificationsReadForAppointment((int) $appointment->id);
 
             self::createNotification($appointment->user_id, $ownerTitle, $ownerMessage, 'appointment_auto_cancelled', [
                 'appointment_id' => $appointment->id,
@@ -249,7 +337,7 @@ class AppointmentReminderService
                     self::createNotification(
                         $staff->id,
                         'Appointment Auto-Cancelled (Ignored Reminder)',
-                        "{$ownerName}'s appointment for {$petName} on {$formattedDate} at {$formattedTime} was auto-cancelled because the 1-day reminder was ignored beyond the 12-hour waiting time.",
+                        $staffMessage,
                         'appointment_auto_cancelled',
                         ['appointment_id' => $appointment->id, 'pet_id' => $appointment->pet_id]
                     );
