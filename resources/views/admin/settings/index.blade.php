@@ -583,10 +583,12 @@
                     <input type="hidden" name="phone" value="{{ $clinic['phone'] }}">
                 @endif
 
+                @if(!$isSuperAdmin)
                 <div class="col-md-6">
                     <label class="f-label">Accreditation / License No.</label>
                     <input type="text" name="accreditation" class="f-input" value="{{ $clinic['accreditation'] }}">
                 </div>
+                @endif
 
                 <div class="col-md-6">
                     <label class="f-label">Clinic Logo</label>

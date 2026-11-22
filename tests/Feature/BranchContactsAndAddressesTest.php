@@ -310,4 +310,47 @@ class BranchContactsAndAddressesTest extends TestCase
             ->assertSee('03:00 PM')
             ->assertSee('Closed on this day');
     }
+
+    public function test_accreditation_is_hidden_for_admin_only_and_never_overwritten_when_omitted(): void
+    {
+        ClinicSetting::set('clinic_accreditation', 'BAI-KEEP-2026');
+        ClinicSetting::set('accreditation', 'BAI-KEEP-2026');
+
+        $super = $this->createAdmin(null);
+        $mabiniStaff = $this->createAdmin('Mabini Branch');
+        $batangasStaff = $this->createAdmin('Batangas City Branch');
+
+        // Top-level Admin does NOT see Accreditation / License No. field
+        $this->actingAs($super)->get('/admin/settings')
+            ->assertStatus(200)
+            ->assertDontSee('Accreditation / License No.')
+            ->assertDontSee('name="accreditation"', false);
+
+        // Both Mabini Branch Staff and Batangas City Branch Staff DO see and can edit it
+        foreach ([$mabiniStaff, $batangasStaff] as $staff) {
+            $this->actingAs($staff)->get('/admin/settings')
+                ->assertStatus(200)
+                ->assertSee('Accreditation / License No.')
+                ->assertSee('name="accreditation"', false)
+                ->assertSee('BAI-KEEP-2026');
+        }
+
+        // Admin submitting Clinic Information without accreditation preserves existing stored value
+        $this->actingAs($super)->post('/admin/settings/clinic', [
+            'clinic_name' => 'BK Petaholic',
+            'email'       => 'info@bk.test',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame('BAI-KEEP-2026', ClinicSetting::get('clinic_accreditation'));
+        $this->assertSame('BAI-KEEP-2026', ClinicSetting::get('accreditation'));
+
+        // Staff CAN update accreditation cleanly
+        $this->actingAs($mabiniStaff)->post('/admin/settings/clinic', [
+            'clinic_name'   => 'BK Petaholic',
+            'email'         => 'info@bk.test',
+            'accreditation' => 'BAI-STAFF-2027',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame('BAI-STAFF-2027', ClinicSetting::get('clinic_accreditation'));
+    }
 }

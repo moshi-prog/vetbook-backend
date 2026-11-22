@@ -45,6 +45,7 @@ Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {
     Route::post('/appointments/{id}/reschedule', [AppointmentController::class, 'reschedule'])->name('appointments.reschedule');
     Route::post('/appointments/{id}/assign-vet', [AppointmentController::class, 'assignVeterinarian'])->name('appointments.assign-vet');
     Route::post('/appointments/{id}/propose-surgery-slot', [AppointmentController::class, 'proposeSurgerySlot'])->name('appointments.propose-surgery-slot');
+    Route::post('/appointments/{id}/remind', [AppointmentController::class, 'sendManualReminder'])->name('appointments.remind');
 
     // Pets
     Route::get('/pets', [PetController::class, 'index'])->name('pets.index');

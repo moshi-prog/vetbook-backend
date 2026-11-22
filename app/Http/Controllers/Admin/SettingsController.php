@@ -469,8 +469,11 @@ class SettingsController extends Controller
 
         ClinicSetting::set('clinic_tagline', $request->tagline);
         ClinicSetting::set('tagline', $request->tagline);
-        ClinicSetting::set('clinic_accreditation', $request->accreditation);
-        ClinicSetting::set('accreditation', $request->accreditation);
+
+        if ($request->has('accreditation') && ($ownKey !== null || $request->filled('accreditation'))) {
+            ClinicSetting::set('clinic_accreditation', $request->accreditation);
+            ClinicSetting::set('accreditation', $request->accreditation);
+        }
 
         if ($ownKey !== null) {
             if ($request->has('hours_weekday')) {

@@ -316,6 +316,62 @@ class AppointmentController extends Controller
         return back()->with('success', 'Surgery date assigned and sent to the pet owner for confirmation.');
     }
 
+    /**
+     * Send a manual custom reminder notification to the pet owner without affecting automatic reminders.
+     */
+    public function sendManualReminder(Request $request, $id)
+    {
+        $this->ensureStaffBranch();
+
+        $user = auth()->user();
+        $appointment = Appointment::with(['pet', 'user'])->findOrFail($id);
+
+        if ($user->branch && $appointment->branch !== $user->branch) {
+            abort(403, 'Access denied. This appointment belongs to another branch.');
+        }
+
+        $validated = $request->validate([
+            'message' => 'required|string|min:2|max:500',
+        ]);
+
+        $customMessage = trim($validated['message']);
+        $petName = $appointment->pet?->name ?? 'your pet';
+        $ownerName = $appointment->user?->name ?? 'Pet Owner';
+        $title = "Reminder from {$appointment->branch} ({$petName})";
+
+        AppNotification::create([
+            'user_id' => $appointment->user_id,
+            'title'   => $title,
+            'message' => $customMessage,
+            'type'    => 'staff_manual_reminder',
+            'data'    => [
+                'appointment_id'  => $appointment->id,
+                'pet_id'          => $appointment->pet_id,
+                'branch'          => $appointment->branch,
+                'sent_by'         => $user->name,
+                'manual_reminder' => true,
+            ],
+        ]);
+
+        if (!empty($appointment->user?->push_token)) {
+            try {
+                \App\Services\PushNotificationService::send(
+                    $appointment->user->push_token,
+                    $title,
+                    $customMessage,
+                    [
+                        'appointment_id' => $appointment->id,
+                        'type'           => 'staff_manual_reminder',
+                    ]
+                );
+            } catch (\Throwable $e) {
+                \Log::warning('Manual staff reminder push notification failed: ' . $e->getMessage());
+            }
+        }
+
+        return back()->with('success', "Reminder notification sent to {$ownerName} for {$petName}.");
+    }
+
     // Approve a pending appointment
     public function approve($id)
     {

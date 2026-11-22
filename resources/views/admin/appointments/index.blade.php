@@ -450,12 +450,24 @@
                                 @endif
                             </td>
                             <td style="text-align: right;">
-                                <div class="d-inline-flex align-items-center gap-1">
+                                <div class="d-inline-flex align-items-center gap-1 flex-wrap justify-content-end">
                                     @if($activeTab === 'surgery' && !in_array($appt->status, ['completed', 'cancelled']))
                                         <button type="button" class="btn btn-sm rounded-pill px-2 py-1 text-white"
                                                 style="background: #4A7C59; font-size: 11px; font-weight: 700;"
                                                 data-bs-toggle="modal" data-bs-target="#setSurgerySlotModal-{{ $appt->id }}">
                                             <i class="fas fa-calendar-plus me-1"></i> Assign Surgery Date
+                                        </button>
+                                    @endif
+                                    @if(!in_array($appt->status, ['completed', 'cancelled']))
+                                        <button type="button" class="btn btn-sm rounded-pill px-2 py-1"
+                                                style="background: #FEF4E5; color: #8A5300; border: 1px solid #F3D19E; font-size: 11px; font-weight: 700;"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#remindPetOwnerModal"
+                                                data-remind-url="{{ route('admin.appointments.remind', $appt->id) }}"
+                                                data-owner-name="{{ $appt->user?->name ?? 'Pet Owner' }}"
+                                                data-pet-name="{{ $appt->pet?->name ?? 'Pet' }}"
+                                                data-appt-schedule="{{ $appt->appointment_date ? \Carbon\Carbon::parse($appt->appointment_date)->format('M d, Y') . ' • ' . $appt->formatted_time : 'Awaiting Staff Date (On-Call Surgery)' }}">
+                                            <i class="fas fa-bell me-1"></i> Remind Pet Owner
                                         </button>
                                     @endif
                                     <a href="{{ route('admin.appointments.show', $appt->id) }}"
@@ -565,9 +577,96 @@
     'exportRoute' => route('admin.appointments.export'),
 ])
 
+{{-- Reusable Staff Manual Reminder Modal --}}
+<div class="modal fade" id="remindPetOwnerModal" tabindex="-1" aria-labelledby="remindPetOwnerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 24px; border: none; overflow: hidden;">
+            <form method="POST" id="remindPetOwnerForm" action="">
+                @csrf
+                <div class="modal-header" style="border-bottom: 1px solid #EAE6DE;">
+                    <h5 class="modal-title" id="remindPetOwnerModalLabel" style="font-family: 'Literata', serif; font-weight: 700; color: #2E3230;">
+                        <i class="fas fa-bell me-2" style="color: #D99B26;"></i> Remind Pet Owner
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="font-family: 'Nunito Sans', sans-serif;">
+                    <div class="p-3 mb-3 rounded-4" style="background: #FAF6F0; border: 1px solid #EAE6DE;">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 small">
+                            <span><strong style="color: #2E3230;" id="remindSummaryPet">Pet</strong> &bull; <span class="text-muted" id="remindSummaryOwner">Pet Owner</span></span>
+                            <span class="badge rounded-pill" style="background: #EBF3ED; color: #2A6038; font-weight: 700;" id="remindSummarySchedule"></span>
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label for="remindMessageInput" class="form-label small fw-bold text-uppercase" style="letter-spacing: 0.5px; color: #6B6358;">
+                            Message to Pet Owner
+                        </label>
+                        <textarea name="message" id="remindMessageInput" class="form-control" rows="4" maxlength="500" required
+                                  placeholder="Type your reminder message (e.g., Please arrive 15 minutes early and bring your pet's vaccination record)..."
+                                  style="border-radius: 14px; border-color: #DCD6CA; font-size: 14px;"></textarea>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between gap-2">
+                        <small class="text-muted" style="font-size: 11px;">
+                            This sends an instant in-app and push notification to the pet owner without affecting automatic appointment reminders.
+                        </small>
+                        <small class="text-muted fw-bold flex-shrink-0" id="remindCharCounter" style="font-size: 11px;">0 / 500</small>
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid #EAE6DE;">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn text-white rounded-pill px-4" style="background: #4A7C59; font-weight: 700; border: none;">
+                        <i class="fas fa-paper-plane me-1"></i> Send Notification
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {{-- Live Table Poller for Newly Booked Appointments --}}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const remindModalEl = document.getElementById('remindPetOwnerModal');
+    const remindForm = document.getElementById('remindPetOwnerForm');
+    const remindMsgInput = document.getElementById('remindMessageInput');
+    const remindCounter = document.getElementById('remindCharCounter');
+    const remindSummaryPet = document.getElementById('remindSummaryPet');
+    const remindSummaryOwner = document.getElementById('remindSummaryOwner');
+    const remindSummarySchedule = document.getElementById('remindSummarySchedule');
+
+    if (remindModalEl) {
+        remindModalEl.addEventListener('show.bs.modal', function (event) {
+            const trigger = event.relatedTarget;
+            if (!trigger) return;
+
+            if (remindForm) {
+                remindForm.setAttribute('action', trigger.getAttribute('data-remind-url') || '');
+            }
+            if (remindSummaryPet) {
+                remindSummaryPet.textContent = trigger.getAttribute('data-pet-name') || 'Pet';
+            }
+            if (remindSummaryOwner) {
+                remindSummaryOwner.textContent = trigger.getAttribute('data-owner-name') || 'Pet Owner';
+            }
+            if (remindSummarySchedule) {
+                remindSummarySchedule.textContent = trigger.getAttribute('data-appt-schedule') || '';
+            }
+            if (remindMsgInput) {
+                remindMsgInput.value = '';
+            }
+            if (remindCounter) {
+                remindCounter.textContent = '0 / 500';
+            }
+        });
+    }
+
+    if (remindMsgInput && remindCounter) {
+        remindMsgInput.addEventListener('input', function () {
+            remindCounter.textContent = `${this.value.length} / 500`;
+        });
+    }
+
     @php
         $maxLoadedId = $appointments->isNotEmpty() ? $appointments->max('id') : 0;
     @endphp
