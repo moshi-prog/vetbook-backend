@@ -569,6 +569,7 @@
                 const isCancel = alert.type && (alert.type.includes('cancel') || alert.type.includes('cancelled'));
                 const isResched = alert.type && alert.type.includes('resched');
                 const isBooked = alert.type && (alert.type.includes('book') || alert.type === 'appointment_booked');
+                const isAccountAuth = alert.type === 'account_approval_needed';
 
                 let iconClass = 'fa-solid fa-bell';
                 let iconBg = '#E8F5E9';
@@ -582,6 +583,10 @@
                     iconClass = 'fa-solid fa-calendar-day';
                     iconBg = '#FFF4E5';
                     iconColor = '#B76E00';
+                } else if (isAccountAuth) {
+                    iconClass = 'fa-solid fa-id-card-clip';
+                    iconBg = '#FFF4E5';
+                    iconColor = '#D99B26';
                 } else if (isBooked) {
                     iconClass = 'fa-solid fa-calendar-plus';
                     iconBg = '#E8F5E9';
@@ -622,7 +627,11 @@
                                 <a href="/admin/appointments/${alert.appointment_id}" class="btn btn-sm btn-outline-success rounded-pill px-3 py-1" style="font-size: 12px; font-weight: 600;">
                                     <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> View Appointment
                                 </a>
-                            ` : '<span></span>'}
+                            ` : (isAccountAuth ? `
+                                <a href="/admin/account-authorizations" class="btn btn-sm rounded-pill px-3 py-1" style="font-size: 12px; font-weight: 700; background: #FFF4E5; color: #B76E00; border: 1px solid #F3D19E;">
+                                    <i class="fa-solid fa-id-card-clip me-1"></i> Review ID &amp; Authorize
+                                </a>
+                            ` : '<span></span>')}
                             <button type="button" class="btn btn-sm text-secondary" style="font-size: 12px;" onclick="dismissAdminAlert(${alert.id})">
                                 Dismiss
                             </button>

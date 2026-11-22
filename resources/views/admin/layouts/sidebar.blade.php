@@ -69,6 +69,24 @@
                     <span class="nav-label">Medical Records</span>
                 </a>
             </li>
+            @php
+                $pendingAuthCount = \App\Models\User::where('role', 'pet_owner')
+                    ->whereNotNull('email_verified_at')
+                    ->where('approval_status', 'pending')
+                    ->count();
+            @endphp
+            <li class="nav-item">
+                <a class="nav-link {{ request()->routeIs('admin.account-authorizations.*') ? 'active' : '' }}"
+                   href="{{ Route::has('admin.account-authorizations.index') ? route('admin.account-authorizations.index') : url('/admin/account-authorizations') }}">
+                    <i class="fa-solid fa-id-card-clip nav-icon"></i>
+                    <span class="nav-label d-flex align-items-center justify-content-between flex-grow-1 gap-2">
+                        <span>Account Authorizations</span>
+                        @if($pendingAuthCount > 0)
+                            <span class="badge rounded-pill" style="background: #D99B26; color: #FFFFFF; font-size: 11px; font-weight: 700;">{{ $pendingAuthCount }}</span>
+                        @endif
+                    </span>
+                </a>
+            </li>
             @endif
             <li class="nav-item">
                 <a class="nav-link {{ request()->routeIs('admin.pet-owners.*') || request()->routeIs('admin.pet-owners.index') ? 'active' : '' }}" 

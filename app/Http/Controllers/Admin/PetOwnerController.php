@@ -9,12 +9,40 @@ use App\Models\AppNotification;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
 class PetOwnerController extends Controller
 {
     private const FILTERS = ['all', 'pending', 'new', 'active', 'pets'];
+    private const AUTH_FILTERS = ['pending', 'rejected', 'approved', 'all'];
     private const SORTS = ['newest', 'name', 'pets', 'appointments'];
+    private const DIRECTORY_COLUMNS = [
+        'users.id',
+        'users.name',
+        'users.email',
+        'users.phone_number',
+        'users.avatar_url',
+        'users.role',
+        'users.branch',
+        'users.email_verified_at',
+        'users.approval_status',
+        'users.approved_at',
+        'users.approved_by',
+        'users.verification_id_type',
+        'users.created_at',
+        'users.updated_at',
+    ];
+
+    private function ensureStaffBranch(): string
+    {
+        $user = auth()->user();
+        if (!$user || $user->branch === null) {
+            abort(403, 'Unauthorized. Only Clinic Staff can access Account Authorizations.');
+        }
+
+        return $user->branch;
+    }
 
     private function visiblePetOwnersQuery()
     {
@@ -96,6 +124,7 @@ class PetOwnerController extends Controller
         ];
 
         $query = (clone $base)
+            ->select(self::DIRECTORY_COLUMNS)
             ->withCount([
                 'pets',
                 'appointments' => $apptScope,
@@ -154,6 +183,68 @@ class PetOwnerController extends Controller
 
         return view('admin.pet-owners.index', compact(
             'owners', 'stats', 'branchesByOwner', 'filters', 'hasFilters', 'branch'
+        ));
+    }
+
+    /**
+     * Dedicated Staff portal page for reviewing verified pet owner IDs / photos.
+     */
+    public function authorizations(Request $request)
+    {
+        $branch = $this->ensureStaffBranch();
+
+        $search = trim((string) $request->input('search', ''));
+        $filter = (string) $request->input('filter', 'pending');
+        if (!in_array($filter, self::AUTH_FILTERS, true)) {
+            $filter = 'pending';
+        }
+
+        $todayStart = Carbon::today()->startOfDay()->toDateTimeString();
+
+        $statsRow = DB::selectOne("
+            SELECT
+                COUNT(CASE WHEN approval_status = 'pending' THEN 1 END) as pending,
+                COUNT(CASE WHEN approval_status = 'pending' AND verification_id_image IS NOT NULL AND verification_id_image != '' THEN 1 END) as with_id,
+                COUNT(CASE WHEN approval_status = 'approved' AND approved_at >= ? THEN 1 END) as approved_today,
+                COUNT(CASE WHEN approval_status = 'rejected' THEN 1 END) as rejected
+            FROM users
+            WHERE role = 'pet_owner'
+              AND email_verified_at IS NOT NULL
+        ", [$todayStart]);
+
+        $stats = [
+            'pending'        => (int) ($statsRow->pending ?? 0),
+            'with_id'        => (int) ($statsRow->with_id ?? 0),
+            'approved_today' => (int) ($statsRow->approved_today ?? 0),
+            'rejected'       => (int) ($statsRow->rejected ?? 0),
+        ];
+
+        $query = User::where('role', 'pet_owner')
+            ->whereNotNull('email_verified_at')
+            ->select(array_merge(self::DIRECTORY_COLUMNS, ['users.verification_id_image']));
+
+        if ($filter !== 'all') {
+            $query->where('approval_status', $filter);
+        }
+
+        if ($search !== '') {
+            $likeOp = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(function ($q) use ($search, $likeOp) {
+                $q->where('name', $likeOp, "%{$search}%")
+                  ->orWhere('email', $likeOp, "%{$search}%")
+                  ->orWhere('phone_number', $likeOp, "%{$search}%");
+            });
+        }
+
+        $applicants = $query
+            ->orderByRaw("CASE WHEN approval_status = 'pending' THEN 0 WHEN approval_status = 'rejected' THEN 1 ELSE 2 END")
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(12)
+            ->withQueryString();
+
+        return view('admin.pet-owners.authorizations', compact(
+            'applicants', 'stats', 'filter', 'search', 'branch'
         ));
     }
 
@@ -306,7 +397,9 @@ class PetOwnerController extends Controller
         $filter = $request->input('filter', 'all');
         $sort = $request->input('sort', 'newest');
 
-        $query = $this->visiblePetOwnersQuery()->withCount(['pets', 'appointments']);
+        $query = $this->visiblePetOwnersQuery()
+            ->select(self::DIRECTORY_COLUMNS)
+            ->withCount(['pets', 'appointments']);
 
         if ($request->filled('ids')) {
             $ids = is_array($request->ids) ? $request->ids : explode(',', (string) $request->ids);

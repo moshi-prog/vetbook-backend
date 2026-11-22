@@ -304,6 +304,41 @@
             </button>
         </div>
 
+        {{-- Verification Photo / Valid ID --}}
+        <div class="section-card">
+            <h3 class="d-flex align-items-center justify-content-between">
+                <span><i class="fas fa-id-card-clip me-2" style="color: #4A7C59;"></i>Verification ID</span>
+                @if($owner->verification_id_type)
+                    <span class="badge rounded-pill" style="background: #F5F1EA; color: #4A4E4A; font-size: 11px; font-weight: 700;">
+                        {{ in_array($owner->verification_id_type, ['selfie', 'selfie_with_id'], true) ? 'Clear Selfie' : 'Valid ID' }}
+                    </span>
+                @endif
+            </h3>
+            @if(!empty($owner->verification_id_image))
+                <div role="button"
+                     tabindex="0"
+                     data-src="{{ $owner->verification_id_image }}"
+                     onclick="openOwnerIdLightbox(this)"
+                     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openOwnerIdLightbox(this);}"
+                     style="background: #F5F1EA; border: 1.5px dashed #D6CFC2; border-radius: 16px; overflow: hidden; cursor: pointer; max-height: 220px; display: flex; align-items: center; justify-content: center;">
+                    <img src="{{ $owner->verification_id_image }}"
+                         alt="Verification photo for {{ $owner->name }}"
+                         style="width: 100%; max-height: 220px; object-fit: contain;">
+                </div>
+                <button type="button"
+                        class="action-btn-lg secondary mt-2 w-100 border-0"
+                        data-src="{{ $owner->verification_id_image }}"
+                        onclick="openOwnerIdLightbox(this)">
+                    <i class="fas fa-search-plus"></i> Zoom &amp; Inspect Full Photo
+                </button>
+            @else
+                <div class="text-muted text-center py-3 px-2" style="background: #FAF8F4; border: 1px dashed #E0DAD0; border-radius: 14px; font-size: 13px;">
+                    <i class="far fa-id-card d-block mb-1" style="font-size: 20px; color: #B4AC9E;"></i>
+                    No verification photo or ID uploaded.
+                </div>
+            @endif
+        </div>
+
         {{-- Details --}}
         <div class="section-card">
             <h3><span><i class="fas fa-id-card me-2" style="color: #4A7C59;"></i>Details</span></h3>
@@ -359,4 +394,39 @@
     </div>
 </div>
 
+{{-- Verification Photo Lightbox Modal --}}
+@if(!empty($owner->verification_id_image))
+<div class="modal fade" id="ownerIdLightboxModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 24px; border: none;">
+            <div class="modal-header" style="border-bottom: 1px solid #EAE6DE;">
+                <h5 class="modal-title" style="font-family: 'Literata', serif; font-weight: 700; color: #1A1D1A;">
+                    <i class="fas fa-id-card-clip me-2" style="color: #4A7C59;"></i> {{ $owner->name }} — Verification Photo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div style="background: #1A1D1A; border-radius: 16px; padding: 12px; display: flex; align-items: center; justify-content: center; max-height: 70vh; overflow: auto;">
+                    <img id="ownerIdLightboxImg" src="" alt="Verification ID" style="max-width: 100%; max-height: 64vh; object-fit: contain;">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
+@endsection
+
+@section('scripts')
+<script>
+    window.openOwnerIdLightbox = function (el) {
+        const src = el.getAttribute('data-src');
+        const img = document.getElementById('ownerIdLightboxImg');
+        const modalEl = document.getElementById('ownerIdLightboxModal');
+        if (src && img && modalEl && window.bootstrap) {
+            img.src = src;
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+    };
+</script>
 @endsection

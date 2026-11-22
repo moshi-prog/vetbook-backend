@@ -8,6 +8,7 @@ use App\Mail\VerifyEmailCodeMail;
 use App\Models\AppNotification;
 use App\Models\EmailVerificationCode;
 use App\Models\User;
+use App\Services\MedicalImageService;
 use App\Services\PushNotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -28,6 +29,17 @@ class AuthController extends Controller
     public function register(Request $request): JsonResponse
     {
         $email = strtolower(trim($request->email ?? ''));
+        $requireVerificationId = $request->boolean('require_verification_id', false);
+        $hasUploadedIdFile = $request->hasFile('verification_id_image') || $request->hasFile('verification_id');
+
+        $verificationRules = [
+            'verification_id_type' => 'nullable|string|in:valid_id,selfie,selfie_with_id',
+        ];
+        if ($requireVerificationId && !$hasUploadedIdFile) {
+            $verificationRules['verification_id_image'] = 'required|string';
+        } elseif (!$hasUploadedIdFile) {
+            $verificationRules['verification_id_image'] = 'nullable|string';
+        }
 
         // Check if an account already exists with this email
         $existingUser = User::whereRaw('LOWER(email) = ?', [$email])->first();
@@ -42,11 +54,13 @@ class AuthController extends Controller
             }
 
             // If account exists but is UNVERIFIED: validate without unique:users, and update the existing user
-            $validator = Validator::make($request->all(), [
+            $validator = Validator::make($request->all(), array_merge([
                 'name'         => 'required|string|max:255',
                 'email'        => 'required|string|email|max:255',
                 'password'     => 'required|string|min:6|confirmed',
                 'phone_number' => 'required|digits:11',
+            ], $verificationRules), [
+                'verification_id_image.required' => 'Please upload a clear photo or valid ID to verify your account.',
             ]);
 
             if ($validator->fails()) {
@@ -56,23 +70,38 @@ class AuthController extends Controller
                 ], 400);
             }
 
+            [$idOk, $compressedIdImage, $idError] = $this->resolveVerificationIdImage($request);
+            if (!$idOk) {
+                return response()->json([
+                    'message' => $idError ?: 'Invalid verification photo or ID image.',
+                    'errors'  => ['verification_id_image' => [$idError ?: 'Invalid verification photo or ID image.']],
+                ], 400);
+            }
+
             $requireStaffApproval = $request->boolean('require_staff_approval', true);
+            $verificationType = $request->filled('verification_id_type')
+                ? trim((string) $request->input('verification_id_type'))
+                : null;
 
             $existingUser->update([
-                'name'            => trim($request->name),
-                'password'        => Hash::make($request->password),
-                'phone_number'    => $request->phone_number,
-                'approval_status' => $requireStaffApproval ? 'pending' : 'approved',
+                'name'                  => trim($request->name),
+                'password'              => Hash::make($request->password),
+                'phone_number'          => $request->phone_number,
+                'approval_status'       => $requireStaffApproval ? 'pending' : 'approved',
+                'verification_id_image' => $compressedIdImage ?? $existingUser->verification_id_image,
+                'verification_id_type'  => $verificationType ?? $existingUser->verification_id_type,
             ]);
 
             $user = $existingUser;
         } else {
             // Fresh new user registration
-            $validator = Validator::make($request->all(), [
+            $validator = Validator::make($request->all(), array_merge([
                 'name'         => 'required|string|max:255',
                 'email'        => 'required|string|email|max:255|unique:users',
                 'password'     => 'required|string|min:6|confirmed',
                 'phone_number' => 'required|digits:11',
+            ], $verificationRules), [
+                'verification_id_image.required' => 'Please upload a clear photo or valid ID to verify your account.',
             ]);
 
             if ($validator->fails()) {
@@ -82,16 +111,29 @@ class AuthController extends Controller
                 ], 400);
             }
 
+            [$idOk, $compressedIdImage, $idError] = $this->resolveVerificationIdImage($request);
+            if (!$idOk) {
+                return response()->json([
+                    'message' => $idError ?: 'Invalid verification photo or ID image.',
+                    'errors'  => ['verification_id_image' => [$idError ?: 'Invalid verification photo or ID image.']],
+                ], 400);
+            }
+
             $requireStaffApproval = $request->boolean('require_staff_approval', true);
+            $verificationType = $request->filled('verification_id_type')
+                ? trim((string) $request->input('verification_id_type'))
+                : ($compressedIdImage ? 'valid_id' : null);
 
             $user = User::create([
-                'name'              => trim($request->name),
-                'email'             => $email,
-                'password'          => Hash::make($request->password),
-                'phone_number'      => $request->phone_number,
-                'role'              => 'pet_owner',
-                'email_verified_at' => null,
-                'approval_status'   => $requireStaffApproval ? 'pending' : 'approved',
+                'name'                  => trim($request->name),
+                'email'                 => $email,
+                'password'              => Hash::make($request->password),
+                'phone_number'          => $request->phone_number,
+                'role'                  => 'pet_owner',
+                'email_verified_at'     => null,
+                'approval_status'       => $requireStaffApproval ? 'pending' : 'approved',
+                'verification_id_image' => $compressedIdImage,
+                'verification_id_type'  => $verificationType,
             ]);
         }
 
@@ -130,6 +172,28 @@ class AuthController extends Controller
         }
 
         return response()->json($responseData, 201);
+    }
+
+    /**
+     * Validate and compress an uploaded or base64-encoded registration photo / valid ID.
+     *
+     * @return array{0: bool, 1: ?string, 2: ?string}
+     */
+    private function resolveVerificationIdImage(Request $request): array
+    {
+        if ($request->hasFile('verification_id_image')) {
+            return MedicalImageService::processUploadedFile($request->file('verification_id_image'));
+        }
+
+        if ($request->hasFile('verification_id')) {
+            return MedicalImageService::processUploadedFile($request->file('verification_id'));
+        }
+
+        if ($request->filled('verification_id_image')) {
+            return MedicalImageService::processBase64DataUri((string) $request->input('verification_id_image'));
+        }
+
+        return [true, null, null];
     }
 
     /**

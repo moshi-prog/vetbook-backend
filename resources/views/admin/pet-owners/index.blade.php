@@ -186,6 +186,12 @@
         </div>
     </div>
     <div class="d-flex align-items-center gap-2">
+        @if(auth()->user()->branch !== null && ($stats['pending_approval'] ?? 0) > 0)
+            <a href="{{ route('admin.account-authorizations.index', ['filter' => 'pending']) }}"
+               class="btn" style="background: #FEF4E5; color: #9A5B00; border: 1px solid #F3D19E; font-family: 'Nunito Sans', sans-serif; font-size: 13px; font-weight: 700; padding: 10px 18px; border-radius: 9999px; text-decoration: none;">
+                <i class="fas fa-id-card-clip me-1"></i> Review Pending IDs ({{ $stats['pending_approval'] }})
+            </a>
+        @endif
         <a href="{{ route('admin.pet-owners.export', request()->query()) }}" target="_blank"
            class="btn" style="background: #4A7C59; color: #FFFFFF; font-family: 'Nunito Sans', sans-serif; font-size: 13px; font-weight: 700; padding: 10px 20px; border-radius: 9999px; text-decoration: none;"
            onmouseover="this.style.background='#3d6b4a'" onmouseout="this.style.background='#4A7C59'">

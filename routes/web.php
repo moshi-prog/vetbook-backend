@@ -72,6 +72,9 @@ Route::prefix('admin')->name('admin.')->middleware('admin')->group(function () {
     Route::post('/medical-records/{id}/images', [MedicalRecordController::class, 'uploadImages'])->name('medical-records.images.store');
     Route::delete('/medical-records/{id}/images/{imageId}', [MedicalRecordController::class, 'destroyImage'])->name('medical-records.images.destroy');
 
+    // Account Authorizations (Staff review of verified pet owner IDs / photos)
+    Route::get('/account-authorizations', [PetOwnerController::class, 'authorizations'])->name('account-authorizations.index');
+
     // Pet owners
     Route::get('/pet-owners', [PetOwnerController::class, 'index'])->name('pet-owners.index');
     Route::get('/pet-owners/export', [PetOwnerController::class, 'export'])->name('pet-owners.export');
