@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ClinicSetting;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
@@ -186,6 +187,12 @@ class SettingsController extends Controller
             'maintenance_mode' => false,
         ];
 
+        $branchSchedule = [
+            'weekday'  => $this->parseScheduleRange($hoursWeekday, '09:00 AM', '06:00 PM'),
+            'saturday' => $this->parseScheduleRange($hoursSaturday, '09:00 AM', '05:00 PM'),
+            'sunday'   => $this->parseScheduleRange($hoursSunday, '10:00 AM', '04:00 PM'),
+        ];
+
         return view('admin.settings.index', compact(
             'clinic',
             'branches',
@@ -193,8 +200,60 @@ class SettingsController extends Controller
             'sms',
             'adminUsers',
             'admins',
-            'preferences'
+            'preferences',
+            'branchSchedule'
         ));
+    }
+
+    private function parseScheduleRange(?string $raw, string $defaultOpen = '09:00 AM', string $defaultClose = '06:00 PM'): array
+    {
+        $trimmed = trim((string) $raw);
+        if ($trimmed === '') {
+            return [
+                'closed'    => false,
+                'open'      => $defaultOpen,
+                'close'     => $defaultClose,
+                'formatted' => "{$defaultOpen} - {$defaultClose}",
+            ];
+        }
+
+        if (stripos($trimmed, 'closed') !== false) {
+            return [
+                'closed'    => true,
+                'open'      => $defaultOpen,
+                'close'     => $defaultClose,
+                'formatted' => 'Closed',
+            ];
+        }
+
+        $cleaned = preg_replace(
+            '/^(?:mon(?:day)?\s*[\-–]\s*(?:fri(?:day)?|sat(?:urday)?)|sat(?:urday)?s?|sun(?:day)?s?)\s*:?\s*/iu',
+            '',
+            $trimmed
+        );
+
+        $sanitize = static fn (string $token): string =>
+            preg_replace('/(?<!:)\b0+(?=[1-9]|\d{2})/', '', trim($token));
+
+        $openFormatted = $defaultOpen;
+        $closeFormatted = $defaultClose;
+
+        if (preg_match('/(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)\s*(?:[\-–—]+|\bto\b)\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)/iu', $sanitize((string) $cleaned), $matches)) {
+            try {
+                $openFormatted = Carbon::parse($sanitize($matches[1]))->format('h:i A');
+                $closeFormatted = Carbon::parse($sanitize($matches[2]))->format('h:i A');
+            } catch (\Throwable $e) {
+                $openFormatted = $defaultOpen;
+                $closeFormatted = $defaultClose;
+            }
+        }
+
+        return [
+            'closed'    => false,
+            'open'      => $openFormatted,
+            'close'     => $closeFormatted,
+            'formatted' => "{$openFormatted} - {$closeFormatted}",
+        ];
     }
 
     public function updateProfile(Request $request)
@@ -424,6 +483,8 @@ class SettingsController extends Controller
                 ClinicSetting::set("branch_{$ownKey}_hours_sunday", $request->hours_sunday);
             }
         }
+
+        $this->forgetBranchesCache();
 
         return back()->with('success', 'Clinic information updated successfully.');
     }

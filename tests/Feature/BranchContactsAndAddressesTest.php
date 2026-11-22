@@ -238,4 +238,76 @@ class BranchContactsAndAddressesTest extends TestCase
         $this->assertStringNotContainsString('0917-123-4567', $prompt);
         $this->assertStringNotContainsString('General Admin Desk:', $prompt);
     }
+
+    public function test_staff_settings_displays_wheel_time_picker_and_syncs_structured_schedules_with_branches_api(): void
+    {
+        $super = $this->createAdmin(null);
+        $mabiniStaff = $this->createAdmin('Mabini Branch');
+        $batangasStaff = $this->createAdmin('Batangas City Branch');
+
+        // System Admin sees read-only branch schedule summary and NO wheel modal
+        $this->actingAs($super)->get('/admin/settings')
+            ->assertStatus(200)
+            ->assertSee('Branch Operating Schedules')
+            ->assertDontSee('id="wheelTimePickerModal"', false);
+
+        // Both Mabini & Batangas City Branch Staff see the wheel modal and Opening/Closing schedule controls
+        foreach ([$mabiniStaff, $batangasStaff] as $staff) {
+            $res = $this->actingAs($staff)->get('/admin/settings');
+            $res->assertStatus(200)
+                ->assertSee('id="wheelTimePickerModal"', false)
+                ->assertSee('id="wheelHours"', false)
+                ->assertSee('id="wheelMinutes"', false)
+                ->assertSee('id="wheelPeriods"', false)
+                ->assertSee('OPENING TIME')
+                ->assertSee('CLOSING TIME')
+                ->assertSee('id="scheduleInput-weekday"', false)
+                ->assertSee('id="scheduleInput-saturday"', false)
+                ->assertSee('id="scheduleInput-sunday"', false);
+        }
+
+        // Mabini Branch Staff updates structured hours via form inputs
+        $this->actingAs($mabiniStaff)->post('/admin/settings/clinic', [
+            'clinic_name'        => 'BK Petaholic',
+            'email'              => 'info@bk.test',
+            'branch_mabini_phone' => '0917-123-4567',
+            'hours_weekday'      => '08:30 AM - 05:30 PM',
+            'hours_saturday'     => '09:00 AM - 03:00 PM',
+            'hours_sunday'       => 'Closed',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        // Batangas City Branch Staff updates structured hours
+        $this->actingAs($batangasStaff)->post('/admin/settings/clinic', [
+            'clinic_name'           => 'BK Petaholic',
+            'email'                 => 'info@bk.test',
+            'branch_batangas_phone' => '0918-765-4321',
+            'hours_weekday'         => '09:00 AM - 06:30 PM',
+            'hours_saturday'        => 'Closed',
+            'hours_sunday'          => '10:00 AM - 04:00 PM',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        // Updates reflect immediately in GET /api/branches
+        $branchesRes = $this->getJson('/api/branches');
+        $branchesRes->assertStatus(200)
+            ->assertJsonPath('data.0.weekday_open', '08:30')
+            ->assertJsonPath('data.0.weekday_close', '17:30')
+            ->assertJsonPath('data.0.saturday_open', '09:00')
+            ->assertJsonPath('data.0.saturday_close', '15:00')
+            ->assertJsonPath('data.0.saturday_closed', false)
+            ->assertJsonPath('data.0.sunday_closed', true)
+            ->assertJsonPath('data.1.weekday_open', '09:00')
+            ->assertJsonPath('data.1.weekday_close', '18:30')
+            ->assertJsonPath('data.1.saturday_closed', true)
+            ->assertJsonPath('data.1.sunday_open', '10:00')
+            ->assertJsonPath('data.1.sunday_close', '16:00')
+            ->assertJsonPath('data.1.sunday_closed', false);
+
+        // Reloading /admin/settings for Mabini Staff reflects persisted schedule values
+        $this->actingAs($mabiniStaff)->get('/admin/settings')
+            ->assertStatus(200)
+            ->assertSee('08:30 AM')
+            ->assertSee('05:30 PM')
+            ->assertSee('03:00 PM')
+            ->assertSee('Closed on this day');
+    }
 }

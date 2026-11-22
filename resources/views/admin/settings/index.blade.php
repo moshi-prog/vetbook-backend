@@ -300,6 +300,172 @@
     .cropper-dashed {
         border: 1px dashed rgba(255, 255, 255, 0.6);
     }
+
+    /* Schedule Cards & iOS Scroll-Wheel Drum Time Picker */
+    .schedule-card {
+        background: #FAF6F0;
+        border: 1px solid rgba(196, 200, 188, 0.5);
+        border-radius: 20px;
+        padding: 18px;
+        height: 100%;
+        transition: border-color 0.2s ease, opacity 0.2s ease, background-color 0.2s ease;
+    }
+    .schedule-card.is-closed {
+        opacity: 0.72;
+        background: #F4EFE6;
+    }
+    .schedule-card.has-error {
+        border-color: #BA1A1A;
+        background: #FFF8F7;
+    }
+    .schedule-time-label {
+        font-family: 'Nunito Sans', sans-serif;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        color: #6B6358;
+        margin-bottom: 5px;
+    }
+    .schedule-time-btn {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(196, 200, 188, 0.75);
+        background: #FFFFFF;
+        font-family: 'Nunito Sans', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        color: #2E3230;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        cursor: pointer;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .schedule-time-btn:hover:not(:disabled) {
+        border-color: #4A7C59;
+        box-shadow: 0 2px 10px rgba(74, 124, 89, 0.14);
+    }
+    .schedule-time-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        background: #EFEBE3;
+    }
+    .schedule-closed-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        background: #EAE6DE;
+        color: #5C5F5C;
+        font-family: 'Nunito Sans', sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+    }
+    .schedule-error {
+        font-family: 'Nunito Sans', sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        color: #BA1A1A;
+        margin-top: 10px;
+    }
+    .wheel-drum-wrap {
+        position: relative;
+        height: 220px;
+        display: flex;
+        align-items: stretch;
+        justify-content: center;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+        margin: 4px 0;
+    }
+    .wheel-highlight-bar {
+        position: absolute;
+        top: 88px;
+        height: 44px;
+        left: 16px;
+        right: 16px;
+        background: #EEF1F4;
+        border-radius: 10px;
+        pointer-events: none;
+        z-index: 1;
+    }
+    .wheel-fade-top {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 76px;
+        background: linear-gradient(to bottom, #FFFFFF 12%, rgba(255, 255, 255, 0));
+        pointer-events: none;
+        z-index: 3;
+    }
+    .wheel-fade-bottom {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 76px;
+        background: linear-gradient(to top, #FFFFFF 12%, rgba(255, 255, 255, 0));
+        pointer-events: none;
+        z-index: 3;
+    }
+    .wheel-col {
+        position: relative;
+        z-index: 2;
+        flex: 1;
+        height: 220px;
+        overflow-y: auto;
+        scroll-snap-type: y mandatory;
+        padding-top: 88px;
+        padding-bottom: 88px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        text-align: center;
+    }
+    .wheel-col::-webkit-scrollbar {
+        display: none;
+    }
+    .wheel-item {
+        height: 44px;
+        line-height: 44px;
+        scroll-snap-align: center;
+        cursor: pointer;
+        font-family: 'Nunito Sans', sans-serif;
+        font-size: 19px;
+        color: #9CA3AF;
+        opacity: 0.45;
+        transition: color 0.1s ease;
+    }
+    .wheel-action-btn {
+        background: transparent;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 10px;
+        font-family: 'Nunito Sans', sans-serif;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+    .wheel-action-btn.cancel {
+        color: #6B7280;
+    }
+    .wheel-action-btn.cancel:hover {
+        background: #F3F4F6;
+        color: #111827;
+    }
+    .wheel-action-btn.ok {
+        color: #4A7C59;
+    }
+    .wheel-action-btn.ok:hover {
+        background: #EBF3ED;
+    }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
 @endsection
@@ -340,7 +506,7 @@
 {{-- TAB 1: CLINIC INFORMATION --}}
 {{-- ========================================================= --}}
 <div class="tab-pane active" id="tab-clinic">
-    <form method="POST" action="{{ route('admin.settings.clinic') }}" enctype="multipart/form-data">
+    <form id="clinicProfileForm" method="POST" action="{{ route('admin.settings.clinic') }}" enctype="multipart/form-data">
         @csrf
         <div class="settings-card">
             <div class="section-head">
@@ -479,19 +645,85 @@
                     <i class="fas fa-clock text-success"></i>
                     {{ auth()->user()->branch . ' Operating Schedule' }}
                 </h4>
+                @php
+                    $fallbackSchedule = [
+                        'weekday'  => ['closed' => false, 'open' => '09:00 AM', 'close' => '06:00 PM', 'formatted' => '09:00 AM - 06:00 PM'],
+                        'saturday' => ['closed' => false, 'open' => '09:00 AM', 'close' => '05:00 PM', 'formatted' => '09:00 AM - 05:00 PM'],
+                        'sunday'   => ['closed' => false, 'open' => '10:00 AM', 'close' => '04:00 PM', 'formatted' => '10:00 AM - 04:00 PM'],
+                    ];
+                    $scheduleCards = [
+                        ['key' => 'weekday',  'name' => 'hours_weekday',  'title' => 'Monday – Friday', 'canClose' => false, 'slot' => $branchSchedule['weekday'] ?? $fallbackSchedule['weekday']],
+                        ['key' => 'saturday', 'name' => 'hours_saturday', 'title' => 'Saturday',        'canClose' => true,  'slot' => $branchSchedule['saturday'] ?? $fallbackSchedule['saturday']],
+                        ['key' => 'sunday',   'name' => 'hours_sunday',   'title' => 'Sunday',          'canClose' => true,  'slot' => $branchSchedule['sunday'] ?? $fallbackSchedule['sunday']],
+                    ];
+                @endphp
                 <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="f-label">Monday – Friday</label>
-                        <input type="text" name="hours_weekday" class="f-input" value="{{ $clinic['hours_weekday'] }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="f-label">Saturday</label>
-                        <input type="text" name="hours_saturday" class="f-input" value="{{ $clinic['hours_saturday'] }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="f-label">Sunday</label>
-                        <input type="text" name="hours_sunday" class="f-input" value="{{ $clinic['hours_sunday'] }}">
-                    </div>
+                    @foreach($scheduleCards as $card)
+                        @php $slot = $card['slot']; @endphp
+                        <div class="col-lg-4">
+                            <div class="schedule-card {{ $slot['closed'] ? 'is-closed' : '' }}" id="scheduleCard-{{ $card['key'] }}">
+                                <input type="hidden" name="{{ $card['name'] }}" id="scheduleInput-{{ $card['key'] }}" value="{{ $slot['formatted'] }}">
+
+                                <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                                    <span class="f-label mb-0">{{ $card['title'] }}</span>
+                                    @if($card['canClose'])
+                                        <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
+                                            <input class="form-check-input schedule-closed-switch" type="checkbox" role="switch"
+                                                   id="scheduleClosed-{{ $card['key'] }}"
+                                                   data-schedule-key="{{ $card['key'] }}"
+                                                   {{ $slot['closed'] ? 'checked' : '' }}>
+                                            <label class="form-check-label small fw-bold text-secondary" for="scheduleClosed-{{ $card['key'] }}" style="cursor: pointer;">Closed</label>
+                                        </div>
+                                    @endif
+                                </div>
+
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <div class="schedule-time-label">OPENING TIME</div>
+                                        <button type="button"
+                                                class="schedule-time-btn"
+                                                id="scheduleBtn-{{ $card['key'] }}-open"
+                                                data-schedule-key="{{ $card['key'] }}"
+                                                data-schedule-bound="open"
+                                                data-schedule-label="{{ $card['title'] }} — Opening Time"
+                                                data-time="{{ $slot['open'] }}"
+                                                {{ $slot['closed'] ? 'disabled' : '' }}>
+                                            <span class="d-inline-flex align-items-center gap-2 text-truncate">
+                                                <i class="far fa-clock text-success"></i>
+                                                <span class="schedule-time-value">{{ $slot['open'] }}</span>
+                                            </span>
+                                            <i class="fas fa-chevron-down text-muted" style="font-size: 11px;"></i>
+                                        </button>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="schedule-time-label">CLOSING TIME</div>
+                                        <button type="button"
+                                                class="schedule-time-btn"
+                                                id="scheduleBtn-{{ $card['key'] }}-close"
+                                                data-schedule-key="{{ $card['key'] }}"
+                                                data-schedule-bound="close"
+                                                data-schedule-label="{{ $card['title'] }} — Closing Time"
+                                                data-time="{{ $slot['close'] }}"
+                                                {{ $slot['closed'] ? 'disabled' : '' }}>
+                                            <span class="d-inline-flex align-items-center gap-2 text-truncate">
+                                                <i class="far fa-clock text-success"></i>
+                                                <span class="schedule-time-value">{{ $slot['close'] }}</span>
+                                            </span>
+                                            <i class="fas fa-chevron-down text-muted" style="font-size: 11px;"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="mt-2 {{ $slot['closed'] ? '' : 'd-none' }}" id="scheduleClosedPill-{{ $card['key'] }}">
+                                    <span class="schedule-closed-pill"><i class="fas fa-moon"></i> Closed on this day</span>
+                                </div>
+
+                                <div class="schedule-error d-none" id="scheduleError-{{ $card['key'] }}">
+                                    <i class="fas fa-circle-exclamation me-1"></i> Closing time must be after opening time.
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
                 </div>
             @endif
 
@@ -1191,6 +1423,35 @@
     </div>
 @endif
 
+@if(auth()->user()->branch !== null)
+    <!-- Modal: iOS-Style Scroll-Wheel Time Picker -->
+    <div class="modal fade" id="wheelTimePickerModal" tabindex="-1" aria-labelledby="wheelPickerTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 340px;">
+            <div class="modal-content" style="background: #FFFFFF; border-radius: 20px; border: none; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.16); overflow: hidden;">
+                <div class="modal-header border-0 pb-1 pt-3 px-4">
+                    <h6 class="modal-title mb-0" id="wheelPickerTitle" style="font-family: 'Literata', serif; font-weight: 700; font-size: 16px; color: #2E3230;">
+                        Select Time
+                    </h6>
+                </div>
+                <div class="modal-body px-3 py-2">
+                    <div class="wheel-drum-wrap">
+                        <div class="wheel-highlight-bar"></div>
+                        <div class="wheel-fade-top"></div>
+                        <div class="wheel-fade-bottom"></div>
+                        <div class="wheel-col" id="wheelHours" role="listbox" aria-label="Hour"></div>
+                        <div class="wheel-col" id="wheelMinutes" role="listbox" aria-label="Minute"></div>
+                        <div class="wheel-col" id="wheelPeriods" role="listbox" aria-label="AM or PM"></div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-1 pb-3 px-4 justify-content-end gap-2">
+                    <button type="button" class="wheel-action-btn cancel" data-bs-dismiss="modal">CANCEL</button>
+                    <button type="button" class="wheel-action-btn ok" id="wheelPickerOkBtn">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+@endif
+
 @endsection
 
 @section('scripts')
@@ -1398,6 +1659,236 @@
 
                 if (cropperModalInstance) {
                     cropperModalInstance.hide();
+                }
+            });
+        }
+    });
+</script>
+@endif
+@if(auth()->user()->branch !== null)
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const ITEM_HEIGHT = 44;
+        const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
+        const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+        const PERIODS = ['AM', 'PM'];
+
+        const modalEl = document.getElementById('wheelTimePickerModal');
+        const titleEl = document.getElementById('wheelPickerTitle');
+        const hoursCol = document.getElementById('wheelHours');
+        const minutesCol = document.getElementById('wheelMinutes');
+        const periodsCol = document.getElementById('wheelPeriods');
+        const okBtn = document.getElementById('wheelPickerOkBtn');
+        const clinicForm = document.getElementById('clinicProfileForm');
+
+        if (!modalEl || !hoursCol || !minutesCol || !periodsCol || !okBtn) {
+            return;
+        }
+
+        let activeTarget = null;
+        let pendingParsedTime = { hour: 9, minute: 0, period: 'AM' };
+
+        function applyDrumPerspective(col) {
+            const centerIdx = col.scrollTop / ITEM_HEIGHT;
+            const items = col.children;
+            for (let i = 0; i < items.length; i++) {
+                const dist = Math.abs(i - centerIdx);
+                const el = items[i];
+                if (dist < 0.45) {
+                    el.style.color = '#111827';
+                    el.style.fontWeight = '600';
+                    el.style.fontSize = '22px';
+                    el.style.opacity = '1';
+                    el.style.transform = 'scale(1)';
+                } else {
+                    const opacity = Math.max(0.18, 1 - dist * 0.28);
+                    const scale = Math.max(0.76, 1 - dist * 0.08);
+                    const fontSize = dist < 1.4 ? '20px' : '18px';
+                    el.style.color = '#6B7280';
+                    el.style.fontWeight = '400';
+                    el.style.fontSize = fontSize;
+                    el.style.opacity = opacity.toFixed(2);
+                    el.style.transform = `scale(${scale.toFixed(3)})`;
+                }
+            }
+        }
+
+        function populateWheel(col, values) {
+            col.innerHTML = '';
+            values.forEach((val, idx) => {
+                const div = document.createElement('div');
+                div.className = 'wheel-item';
+                div.textContent = val;
+                div.setAttribute('role', 'option');
+                div.addEventListener('click', function () {
+                    col.scrollTo({ top: idx * ITEM_HEIGHT, behavior: 'smooth' });
+                });
+                col.appendChild(div);
+            });
+
+            let rafId = null;
+            col.addEventListener('scroll', function () {
+                if (rafId) return;
+                rafId = window.requestAnimationFrame(function () {
+                    rafId = null;
+                    applyDrumPerspective(col);
+                });
+            }, { passive: true });
+        }
+
+        populateWheel(hoursCol, HOURS);
+        populateWheel(minutesCol, MINUTES);
+        populateWheel(periodsCol, PERIODS);
+
+        function parseTime12h(str) {
+            const match = String(str || '').trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+            if (!match) {
+                return { hour: 9, minute: 0, period: 'AM' };
+            }
+            const h = Math.min(12, Math.max(1, parseInt(match[1], 10) || 9));
+            const m = Math.min(59, Math.max(0, parseInt(match[2], 10) || 0));
+            const p = match[3].toUpperCase() === 'PM' ? 'PM' : 'AM';
+            return { hour: h, minute: m, period: p };
+        }
+
+        function formatTime12h(hour, minute, period) {
+            return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${period}`;
+        }
+
+        function timeToMinutes(str) {
+            const parsed = parseTime12h(str);
+            let h24 = parsed.hour % 12;
+            if (parsed.period === 'PM') h24 += 12;
+            return h24 * 60 + parsed.minute;
+        }
+
+        function setWheelToIndex(col, idx, length) {
+            const clamped = Math.min(length - 1, Math.max(0, idx));
+            col.scrollTop = clamped * ITEM_HEIGHT;
+            applyDrumPerspective(col);
+        }
+
+        function readWheelIndex(col, length) {
+            const idx = Math.round(col.scrollTop / ITEM_HEIGHT);
+            return Math.min(length - 1, Math.max(0, idx));
+        }
+
+        function syncScheduleCard(key) {
+            const closedSwitch = document.getElementById(`scheduleClosed-${key}`);
+            const openBtn = document.getElementById(`scheduleBtn-${key}-open`);
+            const closeBtn = document.getElementById(`scheduleBtn-${key}-close`);
+            const hiddenInput = document.getElementById(`scheduleInput-${key}`);
+            const cardEl = document.getElementById(`scheduleCard-${key}`);
+            const closedPill = document.getElementById(`scheduleClosedPill-${key}`);
+            const errorEl = document.getElementById(`scheduleError-${key}`);
+
+            if (!openBtn || !closeBtn || !hiddenInput || !cardEl) return true;
+
+            const isClosed = Boolean(closedSwitch && closedSwitch.checked);
+            openBtn.disabled = isClosed;
+            closeBtn.disabled = isClosed;
+
+            if (isClosed) {
+                cardEl.classList.add('is-closed');
+                cardEl.classList.remove('has-error');
+                if (closedPill) closedPill.classList.remove('d-none');
+                if (errorEl) errorEl.classList.add('d-none');
+                hiddenInput.value = 'Closed';
+                return true;
+            }
+
+            cardEl.classList.remove('is-closed');
+            if (closedPill) closedPill.classList.add('d-none');
+
+            const openVal = openBtn.getAttribute('data-time') || '09:00 AM';
+            const closeVal = closeBtn.getAttribute('data-time') || '06:00 PM';
+            hiddenInput.value = `${openVal} - ${closeVal}`;
+
+            const validRange = timeToMinutes(closeVal) > timeToMinutes(openVal);
+            if (!validRange) {
+                cardEl.classList.add('has-error');
+                if (errorEl) errorEl.classList.remove('d-none');
+            } else {
+                cardEl.classList.remove('has-error');
+                if (errorEl) errorEl.classList.add('d-none');
+            }
+            return validRange;
+        }
+
+        document.querySelectorAll('.schedule-time-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                if (this.disabled) return;
+                activeTarget = {
+                    key: this.getAttribute('data-schedule-key'),
+                    bound: this.getAttribute('data-schedule-bound'),
+                    btn: this,
+                };
+                pendingParsedTime = parseTime12h(this.getAttribute('data-time'));
+                if (titleEl) {
+                    titleEl.textContent = this.getAttribute('data-schedule-label') || 'Select Time';
+                }
+                if (window.bootstrap) {
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                }
+            });
+        });
+
+        modalEl.addEventListener('shown.bs.modal', function () {
+            setWheelToIndex(hoursCol, pendingParsedTime.hour - 1, HOURS.length);
+            setWheelToIndex(minutesCol, pendingParsedTime.minute, MINUTES.length);
+            setWheelToIndex(periodsCol, pendingParsedTime.period === 'PM' ? 1 : 0, PERIODS.length);
+        });
+
+        okBtn.addEventListener('click', function () {
+            if (!activeTarget || !activeTarget.btn) return;
+            const hourIdx = readWheelIndex(hoursCol, HOURS.length);
+            const minuteIdx = readWheelIndex(minutesCol, MINUTES.length);
+            const periodIdx = readWheelIndex(periodsCol, PERIODS.length);
+
+            const formatted = formatTime12h(
+                parseInt(HOURS[hourIdx], 10),
+                parseInt(MINUTES[minuteIdx], 10),
+                PERIODS[periodIdx]
+            );
+
+            activeTarget.btn.setAttribute('data-time', formatted);
+            const valSpan = activeTarget.btn.querySelector('.schedule-time-value');
+            if (valSpan) {
+                valSpan.textContent = formatted;
+            }
+
+            syncScheduleCard(activeTarget.key);
+
+            if (window.bootstrap) {
+                bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+            }
+        });
+
+        document.querySelectorAll('.schedule-closed-switch').forEach(sw => {
+            sw.addEventListener('change', function () {
+                syncScheduleCard(this.getAttribute('data-schedule-key'));
+            });
+        });
+
+        if (clinicForm) {
+            clinicForm.addEventListener('submit', function (e) {
+                const keys = ['weekday', 'saturday', 'sunday'];
+                let allValid = true;
+                let firstInvalidCard = null;
+                keys.forEach(k => {
+                    const ok = syncScheduleCard(k);
+                    if (!ok) {
+                        allValid = false;
+                        if (!firstInvalidCard) {
+                            firstInvalidCard = document.getElementById(`scheduleCard-${k}`);
+                        }
+                    }
+                });
+                if (!allValid) {
+                    e.preventDefault();
+                    if (firstInvalidCard) {
+                        firstInvalidCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
                 }
             });
         }
