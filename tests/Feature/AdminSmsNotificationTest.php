@@ -442,4 +442,16 @@ class AdminSmsNotificationTest extends TestCase
             $log->message
         );
     }
+
+    public function test_live_sms_is_blocked_during_tests_when_non_dummy_token_is_present(): void
+    {
+        Http::fake();
+        config(['services.iprogsms.api_token' => 'real-looking-production-token']);
+
+        $result = SMSService::send('09171234567', 'Test blocked message');
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('Live SMS disabled in testing environment', $result['error']);
+        Http::assertNothingSent();
+    }
 }

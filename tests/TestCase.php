@@ -11,6 +11,10 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
 
+        config([
+            'services.iprogsms.api_token' => null,
+        ]);
+
         // The in-memory settings cache is static; reset it so DB rollbacks between tests never leak stale values.
         ClinicSetting::clearCache();
     }

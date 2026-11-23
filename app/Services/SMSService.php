@@ -16,6 +16,11 @@ class SMSService
         }
 
         $apiToken = config('services.iprogsms.api_token');
+        if (app()->runningUnitTests() && $apiToken !== 'dummy-test-token') {
+            Log::info('IPROG SMS: Blocked live SMS dispatch during automated tests.');
+            return ['success' => false, 'message_id' => null, 'error' => 'Live SMS disabled in testing environment'];
+        }
+
         $baseUrl = rtrim(config('services.iprogsms.base_url', 'https://www.iprogsms.com/api/v1'), '/');
         $timeout = config('services.iprogsms.timeout', 15);
 

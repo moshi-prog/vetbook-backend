@@ -32,5 +32,7 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="IPROGSMS_API_TOKEN" value="" force="true"/>
+        <env name="GEMINI_API_KEY" value="" force="true"/>
     </php>
 </phpunit>
