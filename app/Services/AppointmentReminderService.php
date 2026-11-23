@@ -10,6 +10,8 @@ use Carbon\Carbon;
 
 class AppointmentReminderService
 {
+    public const FINALIZED_RETENTION_MINUTES = 5;
+
     public const REMINDER_TYPES = [
         'appointment_reminder_24h',
         'appointment_reminder_3h',
@@ -35,6 +37,37 @@ class AppointmentReminderService
     }
 
     /**
+     * Permanently remove completed and cancelled appointments once the 5-minute retention window expires,
+     * keeping Pets, MedicalRecords, MedicalRecordImages, and SmsLogs completely intact.
+     */
+    public static function purgeExpiredFinalizedAppointments(?int $userId = null): int
+    {
+        $cutoff = now()->subMinutes(self::FINALIZED_RETENTION_MINUTES);
+
+        $query = Appointment::whereIn('status', [
+            Appointment::STATUS_COMPLETED,
+            Appointment::STATUS_CANCELLED,
+        ])->where('updated_at', '<=', $cutoff);
+
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+
+        $ids = $query->pluck('id')->all();
+        if (empty($ids)) {
+            return 0;
+        }
+
+        foreach ($ids as $id) {
+            self::markReminderNotificationsReadForAppointment((int) $id);
+        }
+
+        Appointment::whereIn('id', $ids)->delete();
+
+        return count($ids);
+    }
+
+    /**
      * Auto-cancel expired/ignored appointments, clear stale reminder notifications,
      * and dispatch app-only 1-day (advance) and 3-hour (same-day) appointment reminders.
      */
@@ -42,6 +75,10 @@ class AppointmentReminderService
     {
         $tz = ClinicSetting::get('pref_timezone', 'Asia/Manila') ?: 'Asia/Manila';
         $nowTz = Carbon::now($tz);
+
+        // Step 0: Permanently purge completed/cancelled appointments past the 5-minute grace window
+        // (Runs BEFORE autoCancelExpiredReminders so newly auto-cancelled rows still stay visible for 5 minutes.)
+        $purgedFinalized = self::purgeExpiredFinalizedAppointments($userId);
 
         // Step A: Auto-cancel expired unconfirmed appointments
         $autoCancelled = self::autoCancelExpiredReminders($userId, $tz);
@@ -142,9 +179,10 @@ class AppointmentReminderService
         }
 
         return [
-            'sent_24h'       => $sent24h,
-            'sent_3h'        => $sent3h,
-            'auto_cancelled' => $autoCancelled,
+            'purged_finalized' => $purgedFinalized,
+            'sent_24h'         => $sent24h,
+            'sent_3h'          => $sent3h,
+            'auto_cancelled'   => $autoCancelled,
         ];
     }
 

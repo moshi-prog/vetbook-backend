@@ -91,4 +91,51 @@ class NotificationController extends Controller
             'unread_count' => 0,
         ]);
     }
+
+    /**
+     * Permanently delete a single notification owned by the authenticated user.
+     *
+     * DELETE /api/notifications/{id}
+     */
+    public function destroy($id): JsonResponse
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+
+        $notification = AppNotification::where('id', $id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (! $notification) {
+            return response()->json(['message' => 'Notification not found'], 404);
+        }
+
+        $notification->delete();
+
+        $unreadCount = AppNotification::where('user_id', $user->id)
+            ->whereNull('read_at')
+            ->count();
+
+        return response()->json([
+            'message'      => 'Notification deleted',
+            'unread_count' => $unreadCount,
+        ]);
+    }
+
+    /**
+     * Permanently clear all notifications belonging to the authenticated user.
+     *
+     * DELETE /api/notifications
+     */
+    public function clearAll(): JsonResponse
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+
+        $deleted = AppNotification::where('user_id', $user->id)->delete();
+
+        return response()->json([
+            'message'       => 'All notifications cleared',
+            'deleted_count' => $deleted,
+            'unread_count'  => 0,
+        ]);
+    }
 }

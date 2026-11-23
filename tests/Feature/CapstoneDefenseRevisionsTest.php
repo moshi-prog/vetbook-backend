@@ -942,7 +942,7 @@ class CapstoneDefenseRevisionsTest extends TestCase
         $res2->assertStatus(201);
         $ignoredSameDayAppt = Appointment::findOrFail($res2->json('appointment.id'));
 
-        // Advance booking created yesterday for today at 4:00 PM (with 24h reminder already sent) MUST NOT get 3h reminder
+        // Advance booking created yesterday for today at 4:00 PM (with recent 24h reminder inside 12h window) MUST NOT get 3h reminder
         $advanceTodayAppt = Appointment::create([
             'user_id' => $owner->id,
             'pet_id' => $pets[2]->id,
@@ -951,7 +951,7 @@ class CapstoneDefenseRevisionsTest extends TestCase
             'appointment_time' => '16:00',
             'status' => Appointment::STATUS_APPROVED,
             'reason' => 'Vaccination',
-            'reminder_24h_sent_at' => $manila9am->copy()->subDay()->utc(),
+            'reminder_24h_sent_at' => $manila9am->copy()->subHours(2)->utc(),
         ]);
         $advanceTodayAppt->forceFill([
             'created_at' => $manila9am->copy()->subDay()->utc(),

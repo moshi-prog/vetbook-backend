@@ -426,6 +426,17 @@
                                 <span class="status-pill {{ $appt->status }}">
                                     {{ ucfirst($appt->status) }}
                                 </span>
+                                @if(in_array($appt->status, ['completed', 'cancelled']) && $appt->updated_at)
+                                    @php
+                                        $removeAt = \Carbon\Carbon::parse($appt->updated_at)->addMinutes(\App\Services\AppointmentReminderService::FINALIZED_RETENTION_MINUTES);
+                                        $minsLeft = max(1, (int) ceil(now()->diffInSeconds($removeAt, false) / 60));
+                                    @endphp
+                                    <div class="mt-1">
+                                        <span class="badge bg-light text-secondary border auto-delete-countdown" style="font-size: 10px;" data-auto-delete-at="{{ $removeAt->toIso8601String() }}">
+                                            <i class="fas fa-hourglass-half me-1"></i> Removes in {{ $minsLeft }}m
+                                        </span>
+                                    </div>
+                                @endif
                                 @if($appt->attendance_confirmed_at)
                                     <div class="mt-1">
                                         <span class="badge bg-success-subtle text-success" style="font-size: 10px;">
@@ -708,6 +719,41 @@ document.addEventListener('DOMContentLoaded', function () {
             checkLatestAppointment();
         }
     }, 30000);
+
+    // Client-side countdown scanner for finalized (completed/cancelled) appointments
+    let autoDeleteReloading = false;
+    function updateAutoDeleteCountdowns() {
+        const badges = document.querySelectorAll('.auto-delete-countdown[data-auto-delete-at]');
+        if (!badges.length) return;
+
+        const nowMs = Date.now();
+        let expiredFound = false;
+
+        badges.forEach(function (el) {
+            const targetMs = new Date(el.getAttribute('data-auto-delete-at')).getTime();
+            if (Number.isNaN(targetMs)) return;
+
+            const remainingSecs = Math.ceil((targetMs - nowMs) / 1000);
+            if (remainingSecs <= 0) {
+                el.innerHTML = '<i class="fas fa-hourglass-end me-1"></i> Removing shortly...';
+                expiredFound = true;
+            } else {
+                const minsLeft = Math.max(1, Math.ceil(remainingSecs / 60));
+                el.innerHTML = '<i class="fas fa-hourglass-half me-1"></i> Removes in ' + minsLeft + 'm';
+            }
+        });
+
+        if (expiredFound && !autoDeleteReloading) {
+            autoDeleteReloading = true;
+            window.location.reload();
+        }
+    }
+
+    setInterval(function () {
+        if (!document.hidden) {
+            updateAutoDeleteCountdowns();
+        }
+    }, 15000);
 });
 </script>
 
