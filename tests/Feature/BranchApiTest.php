@@ -19,6 +19,7 @@ class BranchApiTest extends TestCase
         $response = $this->getJson('/api/branches');
 
         $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
         $response->assertJson([
             'status' => 'success',
             'data' => [
@@ -31,16 +32,6 @@ class BranchApiTest extends TestCase
                     'hoursSunday' => 'Sun: 10:00 AM – 4:00 PM',
                     'phone' => '0917-123-4567',
                     'dialUrl' => 'tel:09171234567',
-                ],
-                [
-                    'id' => 'batangas_city',
-                    'name' => 'Batangas City Branch',
-                    'address' => 'N.F. Almario Bldg, Kumintang Ilaya, Batangas City',
-                    'addressSummary' => 'N.F. Almario Bldg, Kumintang Ilaya',
-                    'hoursWeekday' => 'Mon–Sat: 9:00 AM – 6:00 PM',
-                    'hoursSunday' => 'Sun: 10:00 AM – 4:00 PM',
-                    'phone' => '0918-765-4321',
-                    'dialUrl' => 'tel:09187654321',
                 ],
             ],
         ]);
@@ -65,8 +56,8 @@ class BranchApiTest extends TestCase
         ClinicSetting::set('clinic_phone', '0919-444-3322');
 
         $response = $this->getJson('/api/branches');
+        $this->assertCount(1, $response->json('data'));
         $response->assertJsonPath('data.0.phone', '0917-123-4567');
-        $response->assertJsonPath('data.1.phone', '0918-765-4321');
     }
 
     public function test_response_is_not_cacheable(): void
@@ -75,23 +66,17 @@ class BranchApiTest extends TestCase
         $this->assertStringContainsString('no-store', $this->getJson('/api/branches')->headers->get('Cache-Control'));
     }
 
-    public function test_saving_mabini_does_not_change_batangas_and_vice_versa(): void
+    public function test_saving_mabini_updates_hotline_without_changing_clinic_phone(): void
     {
         $mabiniAdmin = $this->admin('Mabini Branch');
-        $batangasAdmin = $this->admin('Batangas City Branch');
         ClinicSetting::set('clinic_phone', '0919-000-0000');
 
         $this->actingAs($mabiniAdmin)->post('/admin/settings/branches/mabini', ['phone' => '0999-111-2233'])->assertSessionHasNoErrors();
         $r = $this->getJson('/api/branches');
         $r->assertJsonPath('data.0.phone', '0999-111-2233');
-        $r->assertJsonPath('data.1.phone', '0918-765-4321');
+        $r->assertJsonPath('data.0.dialUrl', 'tel:09991112233');
 
-        $this->actingAs($batangasAdmin)->post('/admin/settings/branches/batangas', ['phone' => '0922-888-9900'])->assertSessionHasNoErrors();
-        $r = $this->getJson('/api/branches');
-        $r->assertJsonPath('data.0.phone', '0999-111-2233');
-        $r->assertJsonPath('data.1.phone', '0922-888-9900');
-        $r->assertJsonPath('data.1.dialUrl', 'tel:09228889900');
-
+        $this->actingAs($mabiniAdmin)->post('/admin/settings/branches/batangas', ['phone' => '0922-888-9900'])->assertStatus(404);
         $this->assertSame('0919-000-0000', ClinicSetting::get('clinic_phone'));
     }
 
@@ -99,33 +84,29 @@ class BranchApiTest extends TestCase
     {
         $super = $this->admin(null);
         ClinicSetting::set('branch_mabini_phone', '0999-111-2233');
-        ClinicSetting::set('branch_batangas_phone', '0922-888-9900');
 
         $this->actingAs($super)->post('/admin/settings/clinic', [
             'clinic_name' => 'X', 'email' => 'x@y.com', 'phone' => '0911-000-1111',
         ]);
 
         $this->assertSame('0999-111-2233', ClinicSetting::get('branch_mabini_phone'));
-        $this->assertSame('0922-888-9900', ClinicSetting::get('branch_batangas_phone'));
         $this->assertSame('0911-000-1111', ClinicSetting::get('clinic_phone'));
         $this->assertSame('09000000000', $super->fresh()->phone_number);
     }
 
-    public function test_branch_admin_can_only_edit_own_branch_and_phone_is_validated(): void
+    public function test_branch_admin_can_only_edit_mabini_and_phone_is_validated(): void
     {
         $mabini = $this->admin('Mabini Branch');
 
-        $this->actingAs($mabini)->post('/admin/settings/branches/batangas', ['phone' => '0922-888-9900'])->assertStatus(403);
+        $this->actingAs($mabini)->post('/admin/settings/branches/batangas', ['phone' => '0922-888-9900'])->assertStatus(404);
         $this->actingAs($mabini)->post('/admin/settings/branches/mabini', ['phone' => 'abc'])->assertSessionHasErrors('phone');
         $this->actingAs($mabini)->post('/admin/settings/branches/mabini', ['phone' => '0977-111-2222'])->assertSessionHasNoErrors();
         $this->assertSame('0977-111-2222', ClinicSetting::get('branch_mabini_phone'));
-        $this->assertNull(ClinicSetting::get('branch_batangas_phone'));
     }
 
     public function test_branch_admin_can_update_operating_schedule_independently(): void
     {
         $mabini = $this->admin('Mabini Branch');
-        $batangas = $this->admin('Batangas City Branch');
 
         $this->actingAs($mabini)->post('/admin/settings/clinic', [
             'clinic_name' => 'BK Clinic',
@@ -139,17 +120,13 @@ class BranchApiTest extends TestCase
         $this->assertSame('8:00 AM – 5:00 PM', ClinicSetting::get('branch_mabini_hours_weekday'));
         $this->assertSame('8:00 AM – 5:00 PM', ClinicSetting::get('branch_mabini_hours_saturday'));
         $this->assertSame('9:00 AM – 3:00 PM', ClinicSetting::get('branch_mabini_hours_sunday'));
-        $this->assertNull(ClinicSetting::get('branch_batangas_hours_weekday'));
 
         $r = $this->getJson('/api/branches');
         $r->assertJsonPath('data.0.hoursWeekday', 'Mon–Sat: 8:00 AM – 5:00 PM');
         $r->assertJsonPath('data.0.hoursSunday', 'Sun: 9:00 AM – 3:00 PM');
-        // Batangas should still have its defaults
-        $r->assertJsonPath('data.1.hoursWeekday', 'Mon–Sat: 9:00 AM – 6:00 PM');
-        $r->assertJsonPath('data.1.hoursSunday', 'Sun: 10:00 AM – 4:00 PM');
 
-        // Now Batangas admin updates with differing Saturday and closed Sunday
-        $this->actingAs($batangas)->post('/admin/settings/clinic', [
+        // Now update with differing Saturday and closed Sunday
+        $this->actingAs($mabini)->post('/admin/settings/clinic', [
             'clinic_name' => 'BK Clinic',
             'email' => 'info@bk.test',
             'phone' => '0917-123-4567',
@@ -159,10 +136,8 @@ class BranchApiTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $r2 = $this->getJson('/api/branches');
-        $r2->assertJsonPath('data.0.hoursWeekday', 'Mon–Sat: 8:00 AM – 5:00 PM');
-        $r2->assertJsonPath('data.0.hoursSunday', 'Sun: 9:00 AM – 3:00 PM');
-        $r2->assertJsonPath('data.1.hoursWeekday', 'Mon–Fri: 8:00 AM – 5:00 PM | Sat: 9:00 AM – 1:00 PM');
-        $r2->assertJsonPath('data.1.hoursSunday', 'Sun: Closed');
+        $r2->assertJsonPath('data.0.hoursWeekday', 'Mon–Fri: 8:00 AM – 5:00 PM | Sat: 9:00 AM – 1:00 PM');
+        $r2->assertJsonPath('data.0.hoursSunday', 'Sun: Closed');
     }
 
     public function test_get_branches_includes_clinic_profile_and_logo_url(): void
@@ -300,7 +275,6 @@ class BranchApiTest extends TestCase
     public function test_branches_endpoint_does_not_select_admin_avatar_column(): void
     {
         $this->admin('Mabini Branch');
-        $this->admin('Batangas City Branch');
 
         DB::flushQueryLog();
         DB::enableQueryLog();

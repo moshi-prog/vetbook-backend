@@ -72,25 +72,19 @@ class Appointment extends Model
     }
 
     /**
-     * Branch concurrent staff capacity for the service's staff pool.
+     * Branch concurrent staff capacity for the service's staff pool (Mabini Branch: 1 Groomer, 1 Vet).
      */
     public static function branchCapacityForService(string $branch, string $serviceType): int
     {
-        $isBatangas = stripos($branch, 'batangas') !== false;
-
-        if ($isBatangas) {
-            return $serviceType === 'grooming' ? 3 : 2;
-        }
-
         return 1;
     }
 
     /**
-     * Maximum daily surgeries permitted per clinic branch.
+     * Maximum daily surgeries permitted per clinic branch (Mabini Branch: 1/day).
      */
     public static function dailySurgeryLimitForBranch(string $branch): int
     {
-        return stripos($branch, 'batangas') !== false ? 2 : 1;
+        return 1;
     }
 
     // Status Constants

@@ -388,7 +388,7 @@
                                required style="border-radius: 12px;">
                         <div class="form-text mt-2" style="color: #6B6358;">
                             <i class="fas fa-circle-info me-1 text-success"></i>
-                            {{ $dailyCap === 2 ? 'Batangas City Branch capacity: maximum 2 surgeries per day.' : 'Mabini Branch capacity: maximum 1 surgery per day.' }}
+                            Mabini Branch capacity: maximum 1 surgery per day.
                         </div>
                     </div>
                     <button type="submit" class="action-btn-lg primary mb-0">

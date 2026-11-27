@@ -454,15 +454,6 @@
             <div class="vet-stat-label">Mabini Branch</div>
         </div>
     </div>
-    <div class="vet-stat">
-        <div class="vet-stat-icon" style="background: #D8E6F0; color: #35607E;">
-            <i class="fa-solid fa-hospital"></i>
-        </div>
-        <div>
-            <div class="vet-stat-value">{{ $stats['batangas'] }}</div>
-            <div class="vet-stat-label">Batangas City</div>
-        </div>
-    </div>
 </div>
 
 {{-- Filter & Search Panel --}}
@@ -510,10 +501,8 @@
 
         @if(!$adminBranch)
             <select name="branch" onchange="this.form.submit()">
-                <option value="all" @selected(request('branch') === 'all' || !request('branch'))>All Branches (All Doctors)</option>
+                <option value="all" @selected(request('branch') === 'all' || !request('branch'))>All Doctors</option>
                 <option value="Mabini Branch" @selected(request('branch') === 'Mabini Branch')>Mabini Branch</option>
-                <option value="Batangas City Branch" @selected(request('branch') === 'Batangas City Branch')>Batangas City Branch</option>
-                <option value="all_branches_only" @selected(request('branch') === 'all_branches_only')>Roving / Both Branches</option>
             </select>
         @endif
 
@@ -592,13 +581,9 @@
                                     <span class="branch-badge branch-mabini">
                                         <i class="fa-solid fa-location-dot"></i> Mabini Branch
                                     </span>
-                                @elseif($vet->branch === 'Batangas City Branch')
-                                    <span class="branch-badge branch-batangas">
-                                        <i class="fa-solid fa-location-dot"></i> Batangas City
-                                    </span>
                                 @else
                                     <span class="branch-badge branch-all">
-                                        <i class="fa-solid fa-arrows-split-up-and-left"></i> All Branches (Roving)
+                                        <i class="fa-solid fa-hospital"></i> All / General
                                     </span>
                                 @endif
                             </td>
@@ -706,9 +691,8 @@
                                 <input type="hidden" name="branch" value="{{ $adminBranch }}">
                             @else
                                 <select id="add_branch" name="branch" class="f-input">
-                                    <option value="All Branches">All Branches (Roving Doctor)</option>
-                                    <option value="Mabini Branch">Mabini Branch</option>
-                                    <option value="Batangas City Branch">Batangas City Branch</option>
+                                    <option value="Mabini Branch" selected>Mabini Branch</option>
+                                    <option value="All Branches">All / General</option>
                                 </select>
                             @endif
                         </div>
@@ -780,9 +764,8 @@
                                 <input type="hidden" name="branch" value="{{ $adminBranch }}">
                             @else
                                 <select id="edit_branch" name="branch" class="f-input">
-                                    <option value="All Branches">All Branches (Roving Doctor)</option>
                                     <option value="Mabini Branch">Mabini Branch</option>
-                                    <option value="Batangas City Branch">Batangas City Branch</option>
+                                    <option value="All Branches">All / General</option>
                                 </select>
                             @endif
                         </div>

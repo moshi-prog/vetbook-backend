@@ -23,7 +23,7 @@ class AppointmentController extends Controller
     /**
      * Branches that accept bookings.
      */
-    private const BRANCHES = ['Mabini Branch', 'Batangas City Branch'];
+    private const BRANCHES = ['Mabini Branch'];
 
     /**
      * Statuses that occupy a time slot.
@@ -146,7 +146,6 @@ class AppointmentController extends Controller
         $tz = ClinicSetting::get('pref_timezone', 'Asia/Manila') ?: 'Asia/Manila';
         $nowTz = Carbon::now($tz);
         $todayTz = $nowTz->copy()->startOfDay();
-        $isMabini = stripos((string) $request->branch, 'mabini') !== false;
 
         $dateCarbon = null;
         if (!$isSurgery) {
@@ -158,13 +157,7 @@ class AppointmentController extends Controller
                 ], 422);
             }
 
-            if (!$isMabini && ($request->boolean('disallow_same_day', false) || $request->has('service_type')) && $dateCarbon->lte($todayTz)) {
-                return response()->json([
-                    'message' => 'Same-day appointments are not allowed for Batangas City Branch. Please book at least 1 day in advance (tomorrow onwards).',
-                ], 422);
-            }
-
-            if ($isMabini && $dateCarbon->isSameDay($todayTz)) {
+            if ($dateCarbon->isSameDay($todayTz)) {
                 $requestedDateTimeTz = Carbon::parse($dateCarbon->toDateString() . ' ' . $request->appointment_time, $tz);
                 if ($requestedDateTimeTz->lte($nowTz)) {
                     return response()->json([

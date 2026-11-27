@@ -33,22 +33,22 @@ class BranchContactsAndAddressesTest extends TestCase
         $response->assertStatus(200);
         $html = $response->getContent();
 
-        // Tab 1: hidden phone, NO branch hotline inputs, editable addresses + lock badges for branch hotlines
+        // Tab 1: hidden phone, NO branch hotline inputs, editable Mabini address + lock badge for Mabini hotline
         $this->assertMatchesRegularExpression('/<input[^>]*type="hidden"[^>]*name="phone"/', $html);
         $response->assertDontSee('General Clinic Hotline');
         $response->assertDontSee('name="branch_mabini_phone"', false);
         $response->assertDontSee('name="branch_batangas_phone"', false);
         $response->assertSee('name="branch_mabini_address"', false);
-        $response->assertSee('name="branch_batangas_address"', false);
+        $response->assertDontSee('name="branch_batangas_address"', false);
         $response->assertSee('Managed exclusively by Mabini Branch Staff');
-        $response->assertSee('Managed exclusively by Batangas City Branch Staff');
+        $response->assertDontSee('Batangas City Branch');
 
-        // Tab 2: Both edit modals exist with editable address and read-only phone (no name="phone" inside branch modals)
+        // Tab 2: Mabini edit modal exists with editable address and read-only phone
         $response->assertSee('Add New Branch');
         $response->assertSee('data-bs-target="#editBranchModal-mabini"', false);
-        $response->assertSee('data-bs-target="#editBranchModal-batangas"', false);
+        $response->assertDontSee('data-bs-target="#editBranchModal-batangas"', false);
         $response->assertSee('id="editBranchModal-mabini"', false);
-        $response->assertSee('id="editBranchModal-batangas"', false);
+        $response->assertDontSee('id="editBranchModal-batangas"', false);
         $response->assertSee('name="address"', false);
         $response->assertSee('Contact number can only be updated by the assigned Branch Staff.');
         $this->assertSame(0, preg_match('/id="editBranchModal-[^"]+"[\s\S]*?name="phone"/', $html));
@@ -94,16 +94,6 @@ class BranchContactsAndAddressesTest extends TestCase
         $resMabini->assertSee('Personal staff contact only. To update your branch clinic hotline for pet owners and the AI chatbot, use Clinic Information or Branches.');
         $this->assertSame(1, preg_match('/id="tab-preferences"[\s\S]*$/', $mabiniHtml, $prefsMatch));
         $this->assertStringNotContainsString('name="email"', $prefsMatch[0]);
-
-        // Batangas City Branch Admin symmetry
-        $batangasAdmin = $this->createAdmin('Batangas City Branch');
-        $resBatangas = $this->actingAs($batangasAdmin)->get('/admin/settings');
-        $resBatangas->assertStatus(200);
-        $resBatangas->assertSee('name="branch_batangas_phone"', false);
-        $resBatangas->assertDontSee('name="branch_mabini_phone"', false);
-        $resBatangas->assertSee('data-bs-target="#editBranchModal-batangas"', false);
-        $resBatangas->assertDontSee('data-bs-target="#editBranchModal-mabini"', false);
-        $resBatangas->assertDontSee('name="address"', false);
     }
 
     public function test_super_admin_cannot_modify_branch_hotlines_and_branch_admins_cannot_modify_addresses(): void
@@ -111,17 +101,11 @@ class BranchContactsAndAddressesTest extends TestCase
         $super = $this->createAdmin(null);
         $mabiniAdmin = $this->createAdmin('Mabini Branch');
 
-        // Super Admin CANNOT submit branch_mabini_phone or branch_batangas_phone via /admin/settings/clinic
+        // Super Admin CANNOT submit branch_mabini_phone via /admin/settings/clinic
         $this->actingAs($super)->post('/admin/settings/clinic', [
             'clinic_name' => 'BK Petaholic',
             'email' => 'info@bk.test',
             'branch_mabini_phone' => '0917-000-0001',
-        ])->assertStatus(403);
-
-        $this->actingAs($super)->post('/admin/settings/clinic', [
-            'clinic_name' => 'BK Petaholic',
-            'email' => 'info@bk.test',
-            'branch_batangas_phone' => '0918-000-0002',
         ])->assertStatus(403);
 
         // Super Admin CANNOT submit phone to /admin/settings/branches/{branch}
@@ -130,13 +114,7 @@ class BranchContactsAndAddressesTest extends TestCase
             'address' => '100 New Mabini Ave.',
         ])->assertStatus(403);
 
-        // Branch admin CANNOT submit other branch phone or any address via /admin/settings/clinic
-        $this->actingAs($mabiniAdmin)->post('/admin/settings/clinic', [
-            'clinic_name' => 'BK Petaholic',
-            'email' => 'info@bk.test',
-            'branch_batangas_phone' => '0918-000-0000',
-        ])->assertStatus(403);
-
+        // Branch admin CANNOT submit address via /admin/settings/clinic
         $this->actingAs($mabiniAdmin)->post('/admin/settings/clinic', [
             'clinic_name' => 'BK Petaholic',
             'email' => 'info@bk.test',
@@ -149,101 +127,85 @@ class BranchContactsAndAddressesTest extends TestCase
             'address' => 'Unauthorized New Street',
         ])->assertStatus(403);
 
-        // Branch admin CANNOT edit another branch via /admin/settings/branches/batangas
+        // Removed Batangas route returns 404
         $this->actingAs($mabiniAdmin)->post('/admin/settings/branches/batangas', [
             'phone' => '0918-111-2222',
-        ])->assertStatus(403);
+        ])->assertStatus(404);
 
         $this->assertNull(ClinicSetting::get('branch_mabini_address'));
         $this->assertNull(ClinicSetting::get('branch_mabini_phone'));
-        $this->assertNull(ClinicSetting::get('branch_batangas_phone'));
     }
 
     public function test_exclusive_updates_synchronize_across_settings_api_reports_and_chatbot(): void
     {
         $super = $this->createAdmin(null);
         $mabiniAdmin = $this->createAdmin('Mabini Branch');
-        $batangasAdmin = $this->createAdmin('Batangas City Branch');
 
-        // 1. Super Admin updates both branch addresses via Clinic Information (no branch phones)
+        // 1. Super Admin updates Mabini address via Clinic Information
         $this->actingAs($super)->post('/admin/settings/clinic', [
             'clinic_name' => 'BK Petaholic',
             'email' => 'info@bk.test',
             'phone' => '0917-555-0000',
             'branch_mabini_address' => '100 New Mabini Ave., Poblacion, Mabini, Batangas',
-            'branch_batangas_address' => 'Suite 202 Almario Tower, Kumintang Ilaya, Batangas City',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
-        // 2. Super Admin updates Batangas branch address via Branch modal (without sending phone)
-        $this->actingAs($super)->post('/admin/settings/branches/batangas', [
-            'address' => '2nd Floor Almario Hub, Kumintang Ilaya, Batangas City',
+        // 2. Super Admin updates Mabini branch address via Branch modal (without sending phone)
+        $this->actingAs($super)->post('/admin/settings/branches/mabini', [
+            'address' => '142 Updated Mabini Ave., Poblacion, Mabini, Batangas',
         ])->assertRedirect(route('admin.settings.index') . '#branches')
             ->assertSessionHas('success', 'Branch address updated successfully.');
 
-        // 3. Branch Admins update ONLY their own branch hotlines
+        // 3. Mabini Branch Staff updates Mabini hotline
         $this->actingAs($mabiniAdmin)->post('/admin/settings/clinic', [
             'clinic_name' => 'BK Petaholic',
             'email' => 'info@bk.test',
             'branch_mabini_phone' => '0917-222-3333',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
-        $this->actingAs($batangasAdmin)->post('/admin/settings/branches/batangas', [
-            'phone' => '0918-777-8888',
-        ])->assertRedirect(route('admin.settings.index') . '#branches')
-            ->assertSessionHas('success', 'Branch contact number updated successfully.');
-
         // Sync check: Mobile /api/branches
         $api = $this->getJson('/api/branches');
         $api->assertStatus(200)
+            ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.phone', '0917-222-3333')
-            ->assertJsonPath('data.0.address', '100 New Mabini Ave., Poblacion, Mabini, Batangas')
-            ->assertJsonPath('data.1.phone', '0918-777-8888')
-            ->assertJsonPath('data.1.address', '2nd Floor Almario Hub, Kumintang Ilaya, Batangas City');
+            ->assertJsonPath('data.0.address', '142 Updated Mabini Ave., Poblacion, Mabini, Batangas');
 
         // Sync check: ReportService metadata
         $mabiniReport = ReportService::getClinicMetadata('Mabini Branch');
         $this->assertSame('0917-222-3333', $mabiniReport['phone']);
-        $this->assertSame('100 New Mabini Ave., Poblacion, Mabini, Batangas', $mabiniReport['address']);
+        $this->assertSame('142 Updated Mabini Ave., Poblacion, Mabini, Batangas', $mabiniReport['address']);
 
-        $batangasReport = ReportService::getClinicMetadata('Batangas City Branch');
-        $this->assertSame('0918-777-8888', $batangasReport['phone']);
-        $this->assertSame('2nd Floor Almario Hub, Kumintang Ilaya, Batangas City', $batangasReport['address']);
-
-        // Sync check: Settings view reflects updated addresses & hotlines
+        // Sync check: Settings view reflects updated address & hotline
         $this->actingAs($super)->get('/admin/settings')
-            ->assertSee('100 New Mabini Ave., Poblacion, Mabini, Batangas')
-            ->assertSee('2nd Floor Almario Hub, Kumintang Ilaya, Batangas City')
+            ->assertSee('142 Updated Mabini Ave., Poblacion, Mabini, Batangas')
             ->assertSee('0917-222-3333')
-            ->assertSee('0918-777-8888');
+            ->assertDontSee('Batangas City Branch');
 
-        // Sync check: ChatbotService system prompt contains live phones & addresses + distinct General Admin Desk + accuracy rules
+        // Sync check: ChatbotService system prompt contains live Mabini phone & address + distinct General Admin Desk + accuracy rules
         $prompt = ChatbotService::buildSystemPrompt();
-        $this->assertStringContainsString('100 New Mabini Ave., Poblacion, Mabini, Batangas', $prompt);
-        $this->assertStringContainsString('2nd Floor Almario Hub, Kumintang Ilaya, Batangas City', $prompt);
+        $this->assertStringContainsString('142 Updated Mabini Ave., Poblacion, Mabini, Batangas', $prompt);
         $this->assertStringContainsString('0917-222-3333', $prompt);
-        $this->assertStringContainsString('0918-777-8888', $prompt);
         $this->assertStringContainsString('General Admin Desk: 0917-555-0000', $prompt);
         $this->assertStringContainsString('CONTACT & ADDRESS ACCURACY RULES:', $prompt);
-        $this->assertStringContainsString('call Mabini Branch (0917-222-3333) or Batangas City Branch (0918-777-8888)', $prompt);
+        $this->assertStringContainsString('call Mabini Branch (0917-222-3333)', $prompt);
+        $this->assertStringNotContainsString('Batangas City Branch', $prompt);
     }
 
     public function test_chatbot_omits_stale_default_clinic_phone_when_unset(): void
     {
         ClinicSetting::set('branch_mabini_phone', '0999-111-0001');
-        ClinicSetting::set('branch_batangas_phone', '0999-222-0002');
 
         $prompt = ChatbotService::buildSystemPrompt();
 
-        $this->assertStringContainsString('Mabini Hotline: 0999-111-0001 | Batangas City Hotline: 0999-222-0002', $prompt);
+        $this->assertStringContainsString('Mabini Hotline: 0999-111-0001', $prompt);
         $this->assertStringNotContainsString('0917-123-4567', $prompt);
         $this->assertStringNotContainsString('General Admin Desk:', $prompt);
+        $this->assertStringNotContainsString('Batangas City', $prompt);
     }
 
     public function test_staff_settings_displays_wheel_time_picker_and_syncs_structured_schedules_with_branches_api(): void
     {
         $super = $this->createAdmin(null);
         $mabiniStaff = $this->createAdmin('Mabini Branch');
-        $batangasStaff = $this->createAdmin('Batangas City Branch');
 
         // System Admin sees read-only branch schedule summary and NO wheel modal
         $this->actingAs($super)->get('/admin/settings')
@@ -251,20 +213,18 @@ class BranchContactsAndAddressesTest extends TestCase
             ->assertSee('Branch Operating Schedules')
             ->assertDontSee('id="wheelTimePickerModal"', false);
 
-        // Both Mabini & Batangas City Branch Staff see the wheel modal and Opening/Closing schedule controls
-        foreach ([$mabiniStaff, $batangasStaff] as $staff) {
-            $res = $this->actingAs($staff)->get('/admin/settings');
-            $res->assertStatus(200)
-                ->assertSee('id="wheelTimePickerModal"', false)
-                ->assertSee('id="wheelHours"', false)
-                ->assertSee('id="wheelMinutes"', false)
-                ->assertSee('id="wheelPeriods"', false)
-                ->assertSee('OPENING TIME')
-                ->assertSee('CLOSING TIME')
-                ->assertSee('id="scheduleInput-weekday"', false)
-                ->assertSee('id="scheduleInput-saturday"', false)
-                ->assertSee('id="scheduleInput-sunday"', false);
-        }
+        // Mabini Branch Staff sees the wheel modal and Opening/Closing schedule controls
+        $res = $this->actingAs($mabiniStaff)->get('/admin/settings');
+        $res->assertStatus(200)
+            ->assertSee('id="wheelTimePickerModal"', false)
+            ->assertSee('id="wheelHours"', false)
+            ->assertSee('id="wheelMinutes"', false)
+            ->assertSee('id="wheelPeriods"', false)
+            ->assertSee('OPENING TIME')
+            ->assertSee('CLOSING TIME')
+            ->assertSee('id="scheduleInput-weekday"', false)
+            ->assertSee('id="scheduleInput-saturday"', false)
+            ->assertSee('id="scheduleInput-sunday"', false);
 
         // Mabini Branch Staff updates structured hours via form inputs
         $this->actingAs($mabiniStaff)->post('/admin/settings/clinic', [
@@ -276,16 +236,6 @@ class BranchContactsAndAddressesTest extends TestCase
             'hours_sunday'       => 'Closed',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
-        // Batangas City Branch Staff updates structured hours
-        $this->actingAs($batangasStaff)->post('/admin/settings/clinic', [
-            'clinic_name'           => 'BK Petaholic',
-            'email'                 => 'info@bk.test',
-            'branch_batangas_phone' => '0918-765-4321',
-            'hours_weekday'         => '09:00 AM - 06:30 PM',
-            'hours_saturday'        => 'Closed',
-            'hours_sunday'          => '10:00 AM - 04:00 PM',
-        ])->assertRedirect()->assertSessionHasNoErrors();
-
         // Updates reflect immediately in GET /api/branches
         $branchesRes = $this->getJson('/api/branches');
         $branchesRes->assertStatus(200)
@@ -294,13 +244,7 @@ class BranchContactsAndAddressesTest extends TestCase
             ->assertJsonPath('data.0.saturday_open', '09:00')
             ->assertJsonPath('data.0.saturday_close', '15:00')
             ->assertJsonPath('data.0.saturday_closed', false)
-            ->assertJsonPath('data.0.sunday_closed', true)
-            ->assertJsonPath('data.1.weekday_open', '09:00')
-            ->assertJsonPath('data.1.weekday_close', '18:30')
-            ->assertJsonPath('data.1.saturday_closed', true)
-            ->assertJsonPath('data.1.sunday_open', '10:00')
-            ->assertJsonPath('data.1.sunday_close', '16:00')
-            ->assertJsonPath('data.1.sunday_closed', false);
+            ->assertJsonPath('data.0.sunday_closed', true);
 
         // Reloading /admin/settings for Mabini Staff reflects persisted schedule values
         $this->actingAs($mabiniStaff)->get('/admin/settings')
@@ -318,7 +262,6 @@ class BranchContactsAndAddressesTest extends TestCase
 
         $super = $this->createAdmin(null);
         $mabiniStaff = $this->createAdmin('Mabini Branch');
-        $batangasStaff = $this->createAdmin('Batangas City Branch');
 
         // Top-level Admin does NOT see Accreditation / License No. field
         $this->actingAs($super)->get('/admin/settings')
@@ -326,14 +269,12 @@ class BranchContactsAndAddressesTest extends TestCase
             ->assertDontSee('Accreditation / License No.')
             ->assertDontSee('name="accreditation"', false);
 
-        // Both Mabini Branch Staff and Batangas City Branch Staff DO see and can edit it
-        foreach ([$mabiniStaff, $batangasStaff] as $staff) {
-            $this->actingAs($staff)->get('/admin/settings')
-                ->assertStatus(200)
-                ->assertSee('Accreditation / License No.')
-                ->assertSee('name="accreditation"', false)
-                ->assertSee('BAI-KEEP-2026');
-        }
+        // Mabini Branch Staff DOES see and can edit it
+        $this->actingAs($mabiniStaff)->get('/admin/settings')
+            ->assertStatus(200)
+            ->assertSee('Accreditation / License No.')
+            ->assertSee('name="accreditation"', false)
+            ->assertSee('BAI-KEEP-2026');
 
         // Admin submitting Clinic Information without accreditation preserves existing stored value
         $this->actingAs($super)->post('/admin/settings/clinic', [

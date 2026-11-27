@@ -203,7 +203,7 @@
             <div class="stat-value">{{ $activeBranchesCount ?? 2 }}</div>
             <div class="stat-footer" style="color: #705C30;">
                 <i class="fas fa-location-dot me-1"></i>
-                Mabini &amp; Batangas City
+                Mabini Branch
             </div>
         </div>
     </div>

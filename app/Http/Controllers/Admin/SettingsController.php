@@ -25,7 +25,7 @@ class SettingsController extends Controller
         $hoursSunday = ClinicSetting::get('clinic_hours_sunday', '10:00 AM - 04:00 PM');
 
         if (auth()->check() && auth()->user()->branch !== null) {
-            $branchKey = stripos(auth()->user()->branch, 'batangas') !== false ? 'batangas' : 'mabini';
+            $branchKey = 'mabini';
             $hoursWeekday = ClinicSetting::get("branch_{$branchKey}_hours_weekday", $hoursWeekday);
             $hoursSaturday = ClinicSetting::get("branch_{$branchKey}_hours_saturday", $hoursSaturday);
             $hoursSunday = ClinicSetting::get("branch_{$branchKey}_hours_sunday", $hoursSunday);
@@ -90,7 +90,6 @@ class SettingsController extends Controller
         };
 
         $mabiniAddress = ClinicSetting::get('branch_mabini_address', '142 Mabini St., Poblacion, Mabini, Batangas');
-        $batangasAddress = ClinicSetting::get('branch_batangas_address', 'N.F. Almario Bldg, Kumintang Ilaya, Batangas City');
 
         $branches = [
             [
@@ -100,15 +99,6 @@ class SettingsController extends Controller
                 'key' => 'mabini',
                 'phone' => ClinicSetting::get('branch_mabini_phone', '0917-123-4567'),
                 'hours' => $formatBranchHours('mabini', 'Mon-Sat: 9:00 AM - 6:00 PM | Sun: 10:00 AM - 4:00 PM'),
-                'status' => 'active',
-            ],
-            [
-                'id' => 2,
-                'name' => 'Batangas City Branch',
-                'address' => $batangasAddress,
-                'key' => 'batangas',
-                'phone' => ClinicSetting::get('branch_batangas_phone', '0918-765-4321'),
-                'hours' => $formatBranchHours('batangas', 'Mon-Sat: 9:00 AM - 6:00 PM | Sun: Closed'),
                 'status' => 'active',
             ],
         ];
@@ -121,11 +111,11 @@ class SettingsController extends Controller
             'faqs' => [
                 [
                     'question' => 'What are your operating hours?',
-                    'answer' => "We're open Mon-Sat 9AM-6PM, Sun 10AM-4PM at Mabini Branch, and Mon-Sat 9AM-6PM in Batangas City.",
+                    'answer' => "We're open Mon-Sat 9AM-6PM and Sun 10AM-4PM at Mabini Branch.",
                 ],
                 [
-                    'question' => 'Where are your clinics located?',
-                    'answer' => 'We have two branches in Batangas: Mabini Branch (Poblacion) and Batangas City Branch (Kumintang Ilaya).',
+                    'question' => 'Where is your clinic located?',
+                    'answer' => 'We are located at Mabini Branch (142 Mabini St., Poblacion, Mabini, Batangas).',
                 ],
                 [
                     'question' => 'How do I book an appointment?',
@@ -309,7 +299,7 @@ class SettingsController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email,' . $admin->id,
             'phone_number' => 'nullable|string|max:30',
-            'branch' => 'nullable|string|max:255',
+            'branch' => ['nullable', 'string', 'max:255', Rule::in(['Mabini Branch', ''])],
         ]);
 
         $admin->name = $request->name;
@@ -376,18 +366,15 @@ class SettingsController extends Controller
         $ownKey = $this->ownBranchKey();
 
         if ($ownKey === null) {
-            if ($request->filled('branch_mabini_phone') || $request->filled('branch_batangas_phone')) {
+            if ($request->filled('branch_mabini_phone')) {
                 abort(403, 'Unauthorized. Branch contact numbers can only be changed by branch staff.');
             }
             if ($request->filled('hours_weekday') || $request->filled('hours_saturday') || $request->filled('hours_sunday')) {
                 abort(403, 'Unauthorized. Branch operating schedules can only be changed by branch staff.');
             }
         } else {
-            $otherKey = $ownKey === 'mabini' ? 'batangas' : 'mabini';
-            foreach (['branch_mabini_address', 'branch_batangas_address', "branch_{$otherKey}_phone"] as $forbidden) {
-                if ($request->has($forbidden) && trim((string) $request->input($forbidden)) !== '') {
-                    abort(403, 'Unauthorized.');
-                }
+            if ($request->has('branch_mabini_address') && trim((string) $request->input('branch_mabini_address')) !== '') {
+                abort(403, 'Unauthorized.');
             }
         }
 
@@ -396,9 +383,7 @@ class SettingsController extends Controller
             'email' => 'required|email|max:255',
             'phone' => 'nullable|string|max:50',
             'branch_mabini_phone' => ['nullable', 'string', 'max:30', 'regex:/^[0-9+\-\s()]{7,30}$/'],
-            'branch_batangas_phone' => ['nullable', 'string', 'max:30', 'regex:/^[0-9+\-\s()]{7,30}$/'],
             'branch_mabini_address' => ['nullable', 'string', 'max:255'],
-            'branch_batangas_address' => ['nullable', 'string', 'max:255'],
             'tagline' => 'nullable|string|max:255',
             'accreditation' => 'nullable|string|max:255',
             'hours_weekday' => 'nullable|string|max:100',
@@ -453,13 +438,10 @@ class SettingsController extends Controller
             ClinicSetting::set('phone', $request->phone);
         }
 
-        // Super Admin manages branch addresses only; Branch Admin manages only their own branch hotline
+        // Admin manages branch address; Branch Staff manages branch hotline
         if ($ownKey === null) {
             if ($request->filled('branch_mabini_address')) {
                 ClinicSetting::set('branch_mabini_address', trim($request->branch_mabini_address));
-            }
-            if ($request->filled('branch_batangas_address')) {
-                ClinicSetting::set('branch_batangas_address', trim($request->branch_batangas_address));
             }
         } else {
             if ($request->filled("branch_{$ownKey}_phone")) {
@@ -496,7 +478,6 @@ class SettingsController extends Controller
     {
         $branches = [
             'mabini' => 'Mabini Branch',
-            'batangas' => 'Batangas City Branch',
         ];
         abort_unless(isset($branches[$branch]), 404);
 
@@ -538,9 +519,6 @@ class SettingsController extends Controller
         $userBranch = auth()->user()?->branch;
         if ($userBranch === null || trim($userBranch) === '') {
             return null;
-        }
-        if (stripos($userBranch, 'batangas') !== false) {
-            return 'batangas';
         }
         if (stripos($userBranch, 'mabini') !== false) {
             return 'mabini';

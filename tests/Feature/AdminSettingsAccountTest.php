@@ -231,15 +231,23 @@ class AdminSettingsAccountTest extends TestCase
         $branchAdmin = $this->createAdmin([
             'name' => 'Original Admin',
             'email' => 'orig@vetbook.test',
-            'branch' => 'Mabini Branch',
+            'branch' => null,
             'phone_number' => '09171112222',
         ]);
+
+        // Rejected branch (Batangas City Branch) fails validation
+        $this->actingAs($superAdmin)->post("/admin/users/{$branchAdmin->id}/update", [
+            'name' => 'Updated Admin Officer',
+            'email' => 'officer@vetbook.test',
+            'phone_number' => '09189998877',
+            'branch' => 'Batangas City Branch',
+        ])->assertSessionHasErrors('branch');
 
         $response = $this->actingAs($superAdmin)->post("/admin/users/{$branchAdmin->id}/update", [
             'name' => 'Updated Admin Officer',
             'email' => 'officer@vetbook.test',
             'phone_number' => '09189998877',
-            'branch' => 'Batangas City Branch',
+            'branch' => 'Mabini Branch',
         ]);
 
         $response->assertRedirect();
@@ -249,7 +257,7 @@ class AdminSettingsAccountTest extends TestCase
         $this->assertEquals('Updated Admin Officer', $branchAdmin->name);
         $this->assertEquals('officer@vetbook.test', $branchAdmin->email);
         $this->assertEquals('09189998877', $branchAdmin->phone_number);
-        $this->assertEquals('Batangas City Branch', $branchAdmin->branch);
+        $this->assertEquals('Mabini Branch', $branchAdmin->branch);
     }
 
     public function test_branch_admin_cannot_update_other_admin_users(): void
@@ -424,9 +432,8 @@ class AdminSettingsAccountTest extends TestCase
 
         $response->assertSee('Branch Operating Schedules');
         $response->assertSee('Mabini Branch Schedule');
-        $response->assertSee('Batangas City Branch Schedule');
         $response->assertSee('Managed exclusively by Mabini Branch Staff');
-        $response->assertSee('Managed exclusively by Batangas City Branch Staff');
+        $response->assertDontSee('Batangas City Branch');
 
         $response->assertSee('Multi-branch self-service provisioning is managed via clinic onboarding.');
         $response->assertDontSee('Branch registered in pilot registry');
@@ -481,12 +488,16 @@ class AdminSettingsAccountTest extends TestCase
     {
         ClinicSetting::set('chatbot_system_prompt', 'Always greet pet parents with Warm Batangas Hospitality.');
         ClinicSetting::set('clinic_hours_weekday', '07:30 AM - 08:00 PM');
-        ClinicSetting::set('branch_mabini_hours_weekday', '08:00 AM - 05:30 PM');
 
+        $fallbackPrompt = \App\Services\ChatbotService::buildSystemPrompt();
+        $this->assertStringContainsString('Always greet pet parents with Warm Batangas Hospitality.', $fallbackPrompt);
+        $this->assertStringContainsString('07:30 AM - 08:00 PM', $fallbackPrompt);
+
+        ClinicSetting::set('branch_mabini_hours_weekday', '08:00 AM - 05:30 PM');
         $prompt = \App\Services\ChatbotService::buildSystemPrompt();
 
         $this->assertStringContainsString('Always greet pet parents with Warm Batangas Hospitality.', $prompt);
         $this->assertStringContainsString('08:00 AM - 05:30 PM', $prompt);
-        $this->assertStringContainsString('07:30 AM - 08:00 PM', $prompt);
+        $this->assertStringNotContainsString('Batangas City Branch', $prompt);
     }
 }

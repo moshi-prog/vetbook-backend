@@ -274,58 +274,62 @@ class CapstoneDefenseRevisionsTest extends TestCase
             ])->assertStatus(201);
     }
 
-    public function test_batangas_city_branch_allows_three_concurrent_grooming_bookings_and_two_concurrent_vet_bookings(): void
+    public function test_batangas_city_branch_booking_is_rejected_and_mabini_capacity_is_enforced(): void
     {
         $tomorrow = Carbon::tomorrow()->toDateString();
 
-        // 3 concurrent Grooming bookings at 09:00 succeed
-        for ($i = 1; $i <= 3; $i++) {
-            [$owner, $pets] = $this->createApprovedOwnerWithPets(1);
-            $token = JWTAuth::fromUser($owner);
-            $this->withHeader('Authorization', "Bearer {$token}")
-                ->postJson('/api/appointments', [
-                    'pet_id' => $pets[0]->id,
-                    'branch' => 'Batangas City Branch',
-                    'appointment_date' => $tomorrow,
-                    'appointment_time' => '09:00',
-                    'service_type' => 'Grooming',
-                    'reason' => 'Grooming',
-                ])->assertStatus(201);
-        }
-
-        // 4th concurrent Grooming booking at 09:00 fails
-        [$owner4, $pets4] = $this->createApprovedOwnerWithPets(1);
-        $token4 = JWTAuth::fromUser($owner4);
-        $this->withHeader('Authorization', "Bearer {$token4}")
+        // Batangas City Branch is no longer accepted
+        [$ownerBat, $petsBat] = $this->createApprovedOwnerWithPets(1);
+        $tokenBat = JWTAuth::fromUser($ownerBat);
+        $this->withHeader('Authorization', "Bearer {$tokenBat}")
             ->postJson('/api/appointments', [
-                'pet_id' => $pets4[0]->id,
+                'pet_id' => $petsBat[0]->id,
                 'branch' => 'Batangas City Branch',
+                'appointment_date' => $tomorrow,
+                'appointment_time' => '09:00',
+                'service_type' => 'Grooming',
+                'reason' => 'Grooming',
+            ])->assertStatus(400);
+
+        // Mabini Branch allows 1 concurrent Grooming booking + 1 concurrent Vet booking, rejects 2nd in each pool
+        [$owner1, $pets1] = $this->createApprovedOwnerWithPets(1);
+        [$owner2, $pets2] = $this->createApprovedOwnerWithPets(1);
+        [$owner3, $pets3] = $this->createApprovedOwnerWithPets(1);
+
+        $this->withHeader('Authorization', 'Bearer ' . JWTAuth::fromUser($owner1))
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets1[0]->id,
+                'branch' => 'Mabini Branch',
+                'appointment_date' => $tomorrow,
+                'appointment_time' => '09:00',
+                'service_type' => 'Grooming',
+                'reason' => 'Grooming',
+            ])->assertStatus(201);
+
+        $this->withHeader('Authorization', 'Bearer ' . JWTAuth::fromUser($owner2))
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets2[0]->id,
+                'branch' => 'Mabini Branch',
                 'appointment_date' => $tomorrow,
                 'appointment_time' => '09:00',
                 'service_type' => 'Grooming',
                 'reason' => 'Grooming',
             ])->assertStatus(409);
 
-        // 2 concurrent Vet bookings at 14:00 succeed
-        for ($i = 1; $i <= 2; $i++) {
-            [$vOwner, $vPets] = $this->createApprovedOwnerWithPets(1);
-            $vToken = JWTAuth::fromUser($vOwner);
-            $this->withHeader('Authorization', "Bearer {$vToken}")
-                ->postJson('/api/appointments', [
-                    'pet_id' => $vPets[0]->id,
-                    'branch' => 'Batangas City Branch',
-                    'appointment_date' => $tomorrow,
-                    'appointment_time' => '14:00',
-                    'service_type' => $i === 1 ? 'Diagnostic / Checkup' : 'Vaccination',
-                    'reason' => $i === 1 ? 'Diagnostic / Checkup' : 'Vaccination',
-                ])->assertStatus(201);
-        }
-
-        // 3rd concurrent Vet booking at 14:00 fails
-        $this->withHeader('Authorization', "Bearer {$token4}")
+        $this->withHeader('Authorization', 'Bearer ' . JWTAuth::fromUser($owner2))
             ->postJson('/api/appointments', [
-                'pet_id' => $pets4[0]->id,
-                'branch' => 'Batangas City Branch',
+                'pet_id' => $pets2[0]->id,
+                'branch' => 'Mabini Branch',
+                'appointment_date' => $tomorrow,
+                'appointment_time' => '14:00',
+                'service_type' => 'Diagnostic / Checkup',
+                'reason' => 'Diagnostic / Checkup',
+            ])->assertStatus(201);
+
+        $this->withHeader('Authorization', 'Bearer ' . JWTAuth::fromUser($owner3))
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets3[0]->id,
+                'branch' => 'Mabini Branch',
                 'appointment_date' => $tomorrow,
                 'appointment_time' => '14:00',
                 'service_type' => 'Vaccination',
@@ -344,22 +348,7 @@ class CapstoneDefenseRevisionsTest extends TestCase
         $todayStr = $manilaMorning->toDateString();
         $tomorrowStr = $manilaMorning->copy()->addDay()->toDateString();
 
-        // 1. Batangas City Branch rejects same-day booking (422), allows tomorrow onwards (201)
-        $this->withHeader('Authorization', "Bearer {$token}")
-            ->postJson('/api/appointments', [
-                'pet_id' => $pets[0]->id,
-                'branch' => 'Batangas City Branch',
-                'appointment_date' => $todayStr,
-                'appointment_time' => '15:00',
-                'service_type' => 'Diagnostic / Checkup',
-                'disallow_same_day' => true,
-                'reason' => 'Diagnostic / Checkup',
-            ])
-            ->assertStatus(422)
-            ->assertJsonFragment([
-                'message' => 'Same-day appointments are not allowed for Batangas City Branch. Please book at least 1 day in advance (tomorrow onwards).',
-            ]);
-
+        // 1. Batangas City Branch is rejected cleanly
         $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson('/api/appointments', [
                 'pet_id' => $pets[0]->id,
@@ -367,10 +356,9 @@ class CapstoneDefenseRevisionsTest extends TestCase
                 'appointment_date' => $tomorrowStr,
                 'appointment_time' => '10:00',
                 'service_type' => 'Diagnostic / Checkup',
-                'disallow_same_day' => true,
                 'reason' => 'Diagnostic / Checkup',
             ])
-            ->assertStatus(201);
+            ->assertStatus(400);
 
         // 2. Mabini Branch rejects a PAST slot today (08:30 at 09:00 AM Manila -> 422)
         $this->withHeader('Authorization', "Bearer {$token}")
@@ -388,7 +376,7 @@ class CapstoneDefenseRevisionsTest extends TestCase
                 'message' => 'This time slot has already passed today. Please choose an upcoming time slot.',
             ]);
 
-        // 3. Mabini Branch allows an UPCOMING same-day slot today (15:00 at 09:00 AM Manila -> 201)
+        // 3. Mabini Branch allows an UPCOMING same-day slot today (15:00 at 09:00 AM Manila -> 201) and tomorrow (201)
         $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson('/api/appointments', [
                 'pet_id' => $pets[1]->id,
@@ -400,12 +388,22 @@ class CapstoneDefenseRevisionsTest extends TestCase
                 'reason' => 'Diagnostic / Checkup',
             ])
             ->assertStatus(201);
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson('/api/appointments', [
+                'pet_id' => $pets[0]->id,
+                'branch' => 'Mabini Branch',
+                'appointment_date' => $tomorrowStr,
+                'appointment_time' => '10:00',
+                'service_type' => 'Diagnostic / Checkup',
+                'reason' => 'Diagnostic / Checkup',
+            ])
+            ->assertStatus(201);
     }
 
     public function test_on_call_surgery_workflow_staff_proposes_slot_and_pet_owner_can_proceed_or_request_another_time(): void
     {
         $mabiniStaff = $this->createStaff('Mabini Branch');
-        $batangasStaff = $this->createStaff('Batangas City Branch');
         [$owner, $pets] = $this->createApprovedOwnerWithPets(3);
         $token = JWTAuth::fromUser($owner);
         $tomorrow = Carbon::tomorrow()->toDateString();
@@ -528,33 +526,6 @@ class CapstoneDefenseRevisionsTest extends TestCase
             'proposed_date' => Carbon::parse($proposedDate)->addDay()->toDateString(),
         ])->assertSessionHas('success');
         $this->assertSame('slot_proposed', Appointment::findOrFail($mabiniAppt2Id)->surgery_status);
-
-        // Batangas City Branch daily surgery cap = 2 per day: 2 allowed on same date, 3rd blocked
-        $batIds = [];
-        foreach ([0, 1, 2] as $idx) {
-            $bRes = $this->withHeader('Authorization', "Bearer {$token}")
-                ->postJson('/api/appointments', [
-                    'pet_id' => $pets[$idx]->id,
-                    'branch' => 'Batangas City Branch',
-                    'service_type' => 'Surgery',
-                    'reason' => 'Surgery',
-                ])->assertStatus(201);
-            $batIds[] = $bRes->json('appointment.id');
-        }
-
-        $this->actingAs($batangasStaff)->post("/admin/appointments/{$batIds[0]}/propose-surgery-slot", [
-            'proposed_date' => $proposedDate,
-        ])->assertSessionHas('success');
-        $this->actingAs($batangasStaff)->post("/admin/appointments/{$batIds[1]}/propose-surgery-slot", [
-            'proposed_date' => $proposedDate,
-        ])->assertSessionHas('success');
-
-        $batCapRes = $this->actingAs($batangasStaff)->post("/admin/appointments/{$batIds[2]}/propose-surgery-slot", [
-            'proposed_date' => $proposedDate,
-        ]);
-        $batCapRes->assertRedirect();
-        $batCapRes->assertSessionHas('error', fn ($msg) => str_contains((string) $msg, 'daily surgery limit (2 surgeries per day)'));
-        $this->assertNull(Appointment::findOrFail($batIds[2])->appointment_date);
     }
 
     public function test_simultaneous_multi_pet_booking_creates_appointments_for_all_selected_pets(): void
@@ -845,64 +816,6 @@ class CapstoneDefenseRevisionsTest extends TestCase
                 'service_type' => 'Grooming',
                 'reason' => 'Grooming',
             ])->assertStatus(201);
-
-        // ── Batangas City Branch (3 Groomers, 2 Vets) ─────────────────────────
-        // Assign 1 ON_CALL Surgery on $batDate -> uses 1 of 2 Vets
-        $batSurgRes = $this->withHeader('Authorization', "Bearer {$token1}")
-            ->postJson('/api/appointments', [
-                'pet_id' => $pets1[0]->id,
-                'branch' => 'Batangas City Branch',
-                'service_type' => 'Surgery',
-                'reason' => 'Surgery',
-            ])->assertStatus(201);
-        $this->actingAs($batangasStaff)->post('/admin/appointments/' . $batSurgRes->json('appointment.id') . '/propose-surgery-slot', [
-            'proposed_date' => $batDate,
-        ])->assertSessionHas('success');
-
-        // 1 Vaccination at 10:00 succeeds (uses 2nd Vet); 2nd Vaccination at 10:00 fails (409)
-        $this->withHeader('Authorization', "Bearer {$token2}")
-            ->postJson('/api/appointments', [
-                'pet_id' => $pets2[0]->id,
-                'branch' => 'Batangas City Branch',
-                'appointment_date' => $batDate,
-                'appointment_time' => '10:00',
-                'service_type' => 'Vaccination',
-                'reason' => 'Vaccination',
-            ])->assertStatus(201);
-
-        $this->withHeader('Authorization', "Bearer {$token3}")
-            ->postJson('/api/appointments', [
-                'pet_id' => $pets3[0]->id,
-                'branch' => 'Batangas City Branch',
-                'appointment_date' => $batDate,
-                'appointment_time' => '10:00',
-                'service_type' => 'Vaccination',
-                'reason' => 'Vaccination',
-            ])->assertStatus(409);
-
-        // All 3 Groomers at 10:00 on $batDate STILL succeed independently; 4th fails (409)
-        foreach ([$token1, $token2, $token3] as $idx => $tok) {
-            $pId = [$pets1[1]->id, $pets2[1]->id, $pets3[1]->id][$idx];
-            $this->withHeader('Authorization', "Bearer {$tok}")
-                ->postJson('/api/appointments', [
-                    'pet_id' => $pId,
-                    'branch' => 'Batangas City Branch',
-                    'appointment_date' => $batDate,
-                    'appointment_time' => '10:00',
-                    'service_type' => 'Grooming',
-                    'reason' => 'Grooming',
-                ])->assertStatus(201);
-        }
-
-        $this->withHeader('Authorization', "Bearer {$token4}")
-            ->postJson('/api/appointments', [
-                'pet_id' => $pets4[0]->id,
-                'branch' => 'Batangas City Branch',
-                'appointment_date' => $batDate,
-                'appointment_time' => '10:00',
-                'service_type' => 'Grooming',
-                'reason' => 'Grooming',
-            ])->assertStatus(409);
     }
 
     public function test_same_day_mabini_booking_sends_3h_reminder_and_auto_cancels_after_2h_waiting_time(): void
@@ -942,13 +855,13 @@ class CapstoneDefenseRevisionsTest extends TestCase
         $res2->assertStatus(201);
         $ignoredSameDayAppt = Appointment::findOrFail($res2->json('appointment.id'));
 
-        // Advance booking created yesterday for today at 4:00 PM (with recent 24h reminder inside 12h window) MUST NOT get 3h reminder
+        // Advance booking created yesterday for today at 4:30 PM (with recent 24h reminder inside 12h window) MUST NOT get 3h reminder
         $advanceTodayAppt = Appointment::create([
             'user_id' => $owner->id,
             'pet_id' => $pets[2]->id,
-            'branch' => 'Batangas City Branch',
+            'branch' => 'Mabini Branch',
             'appointment_date' => $todayStr,
-            'appointment_time' => '16:00',
+            'appointment_time' => '16:30',
             'status' => Appointment::STATUS_APPROVED,
             'reason' => 'Vaccination',
             'reminder_24h_sent_at' => $manila9am->copy()->subHours(2)->utc(),

@@ -32,22 +32,17 @@ class ChatbotService
         $hoursSaturday = ClinicSetting::get('clinic_hours_saturday') ?: ClinicSetting::get('hours_saturday', '9:00 AM - 6:00 PM');
         $hoursSunday = ClinicSetting::get('clinic_hours_sunday') ?: ClinicSetting::get('hours_sunday', '10:00 AM - 4:00 PM');
 
-        // Branch-specific hours (if configured, otherwise fall back to global)
+        // Mabini Branch hours (if configured, otherwise fall back to global)
         $mabiniWeekday = ClinicSetting::get('branch_mabini_hours_weekday') ?: $hoursWeekday;
         $mabiniSaturday = ClinicSetting::get('branch_mabini_hours_saturday') ?: $hoursSaturday;
         $mabiniSunday = ClinicSetting::get('branch_mabini_hours_sunday') ?: $hoursSunday;
-        $batangasWeekday = ClinicSetting::get('branch_batangas_hours_weekday') ?: $hoursWeekday;
-        $batangasSaturday = ClinicSetting::get('branch_batangas_hours_saturday') ?: $hoursSaturday;
-        $batangasSunday = ClinicSetting::get('branch_batangas_hours_sunday') ?: $hoursSunday;
 
-        // 4. Branch Locations & Independent Hotlines
+        // 4. Clinic Location & Hotline (Mabini Branch)
         $mabiniPhone = ClinicSetting::get('branch_mabini_phone', '0917-123-4567');
-        $batangasPhone = ClinicSetting::get('branch_batangas_phone', '0918-765-4321');
         $mabiniAddress = ClinicSetting::get('branch_mabini_address', '142 Mabini St., Poblacion, Mabini, Batangas');
-        $batangasAddress = ClinicSetting::get('branch_batangas_address', 'N.F. Almario Bldg, Kumintang Ilaya, Batangas City');
 
         $configuredClinicPhone = trim((string) ClinicSetting::get('clinic_phone', ''));
-        $adminDeskLine = ($configuredClinicPhone !== '' && $configuredClinicPhone !== $mabiniPhone && $configuredClinicPhone !== $batangasPhone)
+        $adminDeskLine = ($configuredClinicPhone !== '' && $configuredClinicPhone !== $mabiniPhone)
             ? "General Admin Desk: {$configuredClinicPhone} | "
             : '';
 
@@ -59,25 +54,19 @@ class ChatbotService
         $prompt = "{$introSection}\n\n"
             . "CURRENT TIME & DATE:\n"
             . "• Current Philippine Standard Time: {$currentDateTimeStr} (Today is {$currentDay}).\n"
-            . "• Use this current time to determine if a branch is currently open or closed when the user asks.\n\n"
-            . "OFFICIAL CLINIC LOCATIONS & REAL-TIME OPERATING HOURS:\n"
-            . "1. Mabini Branch:\n"
+            . "• Use this current time to determine if Mabini Branch is currently open or closed when the user asks.\n\n"
+            . "OFFICIAL CLINIC LOCATION & REAL-TIME OPERATING HOURS:\n"
+            . "Mabini Branch:\n"
             . "   - Address: {$mabiniAddress}\n"
             . "   - Hotline / Mobile: {$mabiniPhone}\n"
             . "   - Hours (Monday to Friday): {$mabiniWeekday}\n"
             . "   - Hours (Saturday): {$mabiniSaturday}\n"
             . "   - Hours (Sunday): {$mabiniSunday}\n\n"
-            . "2. Batangas City Branch:\n"
-            . "   - Address: {$batangasAddress}\n"
-            . "   - Hotline / Mobile: {$batangasPhone}\n"
-            . "   - Hours (Monday to Friday): {$batangasWeekday}\n"
-            . "   - Hours (Saturday): {$batangasSaturday}\n"
-            . "   - Hours (Sunday): {$batangasSunday}\n\n"
-            . "Mabini Hotline: {$mabiniPhone} | Batangas City Hotline: {$batangasPhone}\n"
+            . "Mabini Hotline: {$mabiniPhone}\n"
             . "{$adminDeskLine}Email: {$clinicEmail}\n\n"
             . "CONTACT & ADDRESS ACCURACY RULES:\n"
-            . "• Whenever asked for contact numbers, hotlines, or clinic addresses, always report the exact current Mabini Branch ({$mabiniPhone} | {$mabiniAddress}) and Batangas City Branch ({$batangasPhone} | {$batangasAddress}) values from above.\n"
-            . "• Never swap branches or invent outdated numbers.\n\n"
+            . "• Whenever asked for contact numbers, hotlines, or clinic address, always report the exact current Mabini Branch ({$mabiniPhone} | {$mabiniAddress}) values from above.\n"
+            . "• Never invent outdated numbers or non-existent branch locations.\n\n"
             . "SERVICES OFFERED:\n"
             . "• General veterinary consultations & health checkups\n"
             . "• Complete pet vaccinations (Anti-Rabies, 5-in-1, 6-in-1, 8-in-1 for dogs, 4-in-1 FVRCP for cats)\n"
@@ -92,7 +81,7 @@ class ChatbotService
             . "1. You are an AI assistant, NOT a licensed veterinarian. NEVER provide definitive medical diagnoses, drug dosages, or chemical treatment plans.\n"
             . "2. NEVER prescribe human medications (e.g. Paracetamol/Ibuprofen are toxic to pets).\n"
             . "3. For illness symptoms, offer only gentle comfort observations (keep the pet warm, hydrated, resting) and keep replies concise (2-3 short paragraphs max).\n"
-            . "4. For urgent red-flag symptoms (difficulty breathing, seizures, trauma, severe bleeding, continuous vomiting), immediately urge the owner to call Mabini Branch ({$mabiniPhone}) or Batangas City Branch ({$batangasPhone}) or visit the nearest branch right away.\n"
+            . "4. For urgent red-flag symptoms (difficulty breathing, seizures, trauma, severe bleeding, continuous vomiting), immediately urge the owner to call Mabini Branch ({$mabiniPhone}) or visit the clinic right away.\n"
             . "5. End answers with a warm, encouraging invitation to visit BK Petaholic Animal Clinic or book an appointment in the app.\n";
 
         // 5. Live Pet Medicine & Stock Inventory
@@ -133,7 +122,7 @@ class ChatbotService
             . "{$medicineLines}\n\n"
             . "MEDICINE & STOCK INQUIRY RULES:\n"
             . "1. When a pet owner asks if a medicine, vaccine, dewormer, or treatment is available or in stock (or asks how many stock are left), check the live CLINIC PET MEDICINE INVENTORY list above and give the exact current status (In Stock with quantity/unit, Low Stock, or Out of Stock) and which branch carries it.\n"
-            . "2. If the requested medicine is NOT listed in the inventory above, clearly tell the owner it is not currently shown in our live inventory and suggest calling the branch hotline (Mabini: {$mabiniPhone}, Batangas City: {$batangasPhone}) to confirm before visiting.\n"
+            . "2. If the requested medicine is NOT listed in the inventory above, clearly tell the owner it is not currently shown in our live inventory and suggest calling Mabini Branch ({$mabiniPhone}) to confirm before visiting.\n"
             . "3. Keep STRICT CLINICAL SAFETY RULE #1: you may report whether a medicine is in stock, its target pet species, and how much stock is available, but NEVER prescribe dosages or instruct owners to medicate their pet without a veterinarian's examination.\n";
 
         // 6. User & Pet Personalization

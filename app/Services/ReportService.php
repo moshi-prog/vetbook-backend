@@ -20,27 +20,14 @@ class ReportService
 
         $currentBranch = $branch ?? (auth()->check() ? auth()->user()->branch : null);
 
-        // Live branch addresses & contact numbers
+        // Live Mabini Branch address & contact number
         $mabiniPhone = ClinicSetting::get('branch_mabini_phone', '0917-123-4567');
-        $batangasPhone = ClinicSetting::get('branch_batangas_phone', '0918-765-4321');
         $mabiniAddress = ClinicSetting::get('branch_mabini_address', '142 Mabini St., Poblacion, Mabini, Batangas');
-        $batangasAddress = ClinicSetting::get('branch_batangas_address', 'N.F. Almario Bldg, Kumintang Ilaya, Batangas City');
 
         // Branch address, phone, and display name
-        $address = "{$mabiniAddress} & {$batangasAddress}";
-        $phone = ClinicSetting::get('clinic_phone', '+63 917 123 4567');
-        $branchTitle = 'All Branches';
-
-        if ($currentBranch) {
-            $branchTitle = $currentBranch;
-            if (stripos($currentBranch, 'batangas') !== false) {
-                $address = $batangasAddress;
-                $phone = $batangasPhone;
-            } else {
-                $address = $mabiniAddress;
-                $phone = $mabiniPhone;
-            }
-        }
+        $address = $mabiniAddress;
+        $phone = $mabiniPhone;
+        $branchTitle = $currentBranch ?: 'Mabini Branch';
 
         return [
             'clinic_name'   => $clinicName,

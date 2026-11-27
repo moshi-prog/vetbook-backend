@@ -533,12 +533,10 @@
 
                 @php
                     $isSuperAdmin = auth()->user()->branch === null;
-                    $ownBranchKey = (!$isSuperAdmin && stripos(auth()->user()->branch, 'batangas') !== false) ? 'batangas' : 'mabini';
-                    $ownBranchLabel = $ownBranchKey === 'batangas' ? 'Batangas City Branch' : 'Mabini Branch';
+                    $ownBranchKey = 'mabini';
+                    $ownBranchLabel = 'Mabini Branch';
                     $mabiniPhoneVal = \App\Models\ClinicSetting::get('branch_mabini_phone', '0917-123-4567');
-                    $batangasPhoneVal = \App\Models\ClinicSetting::get('branch_batangas_phone', '0918-765-4321');
                     $mabiniAddressVal = \App\Models\ClinicSetting::get('branch_mabini_address', '142 Mabini St., Poblacion, Mabini, Batangas');
-                    $batangasAddressVal = \App\Models\ClinicSetting::get('branch_batangas_address', 'N.F. Almario Bldg, Kumintang Ilaya, Batangas City');
                 @endphp
 
                 @if($isSuperAdmin)
@@ -548,35 +546,24 @@
                         <input type="text" name="branch_mabini_address" class="f-input" value="{{ $mabiniAddressVal }}" maxlength="255">
                     </div>
                     <div class="col-md-6">
-                        <label class="f-label">Batangas City Branch Address</label>
-                        <input type="text" name="branch_batangas_address" class="f-input" value="{{ $batangasAddressVal }}" maxlength="255">
-                    </div>
-                    <div class="col-md-6">
                         <label class="f-label">Mabini Branch Support Hotline</label>
                         <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px;">
                             <span class="text-truncate">{{ $mabiniPhoneVal }}</span>
                             <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Managed exclusively by Mabini Branch Staff</span>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="f-label">Batangas City Branch Support Hotline</label>
-                        <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px;">
-                            <span class="text-truncate">{{ $batangasPhoneVal }}</span>
-                            <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Managed exclusively by Batangas City Branch Staff</span>
-                        </div>
-                    </div>
                 @else
                     <div class="col-md-6">
                         <label class="f-label">{{ $ownBranchLabel }} Contact Number</label>
                         <input type="text" name="branch_{{ $ownBranchKey }}_phone" class="f-input"
-                               value="{{ $ownBranchKey === 'batangas' ? $batangasPhoneVal : $mabiniPhoneVal }}"
+                               value="{{ $mabiniPhoneVal }}"
                                required maxlength="30">
                         <div class="f-help">Direct hotline shown to pet owners and the AI assistant for {{ $ownBranchLabel }}.</div>
                     </div>
                     <div class="col-md-6">
                         <label class="f-label">{{ $ownBranchLabel }} Address</label>
                         <div class="f-input d-flex align-items-center justify-content-between bg-white" style="gap: 8px;">
-                            <span class="text-truncate">{{ $ownBranchKey === 'batangas' ? $batangasAddressVal : $mabiniAddressVal }}</span>
+                            <span class="text-truncate">{{ $mabiniAddressVal }}</span>
                             <span class="badge-pill neutral flex-shrink-0"><i class="fas fa-lock me-1"></i> Branch address is managed exclusively by Admin</span>
                         </div>
                     </div>
@@ -743,8 +730,8 @@
     <div class="settings-card">
         <div class="section-head">
             <div>
-                <h3 class="section-title"><i class="fas fa-location-dot text-success"></i> Clinic Branches</h3>
-                <div class="section-desc">Manage physical clinic stations in Mabini and Batangas City.</div>
+                <h3 class="section-title"><i class="fas fa-location-dot text-success"></i> Clinic Branch</h3>
+                <div class="section-desc">Manage clinic station details in Mabini, Batangas.</div>
             </div>
             @if(auth()->user()->branch === null)
             <button type="button" class="btn-green-save" data-bs-toggle="modal" data-bs-target="#addBranchModal">
@@ -768,8 +755,7 @@
                 </div>
                 <div class="d-flex gap-2">
                     @php
-                        $canEditThisBranch = auth()->user()->branch === null ||
-                            ((stripos(auth()->user()->branch, 'batangas') !== false ? 'batangas' : 'mabini') === $branch['key']);
+                        $canEditThisBranch = auth()->user()->branch === null || 'mabini' === $branch['key'];
                     @endphp
                     @if($canEditThisBranch)
                     <button type="button" class="btn-soft" data-bs-toggle="modal" data-bs-target="#editBranchModal-{{ $branch['key'] }}">
@@ -1235,8 +1221,7 @@
 {{-- MODALS: EDIT BRANCH HOTLINE & ADDRESS --}}
 @foreach($branches as $branch)
     @php
-        $canEditModal = auth()->user()->branch === null ||
-            ((stripos(auth()->user()->branch, 'batangas') !== false ? 'batangas' : 'mabini') === $branch['key']);
+        $canEditModal = auth()->user()->branch === null || 'mabini' === $branch['key'];
     @endphp
     @if($canEditModal)
         <div class="modal fade" id="editBranchModal-{{ $branch['key'] }}" tabindex="-1" aria-hidden="true">
@@ -1315,7 +1300,6 @@
                                 <select name="branch" class="f-select">
                                     <option value="" {{ !$admin->branch ? 'selected' : '' }}>System Admin (Account Management)</option>
                                     <option value="Mabini Branch" {{ $admin->branch === 'Mabini Branch' ? 'selected' : '' }}>Mabini Branch</option>
-                                    <option value="Batangas City Branch" {{ $admin->branch === 'Batangas City Branch' ? 'selected' : '' }}>Batangas City Branch</option>
                                 </select>
                             </div>
                         </div>

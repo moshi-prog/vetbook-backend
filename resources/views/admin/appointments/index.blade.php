@@ -278,7 +278,6 @@
                 <select name="branch" class="form-select" style="border-radius: 16px; height: 42px; border: 1px solid rgba(196,200,188,0.4); background: #FAF6F0; font-family: 'Nunito Sans', sans-serif; font-size: 13px;" onchange="this.form.submit()">
                     <option value="all" {{ !request('branch') || request('branch') == 'all' ? 'selected' : '' }}>All Branches</option>
                     <option value="Mabini Branch" {{ request('branch') == 'Mabini Branch' ? 'selected' : '' }}>Mabini Branch</option>
-                    <option value="Batangas City Branch" {{ request('branch') == 'Batangas City Branch' ? 'selected' : '' }}>Batangas City Branch</option>
                 </select>
             </div>
         @endif
@@ -522,7 +521,7 @@
                                                                    required style="border-radius: 12px;">
                                                             <div class="form-text mt-2" style="color: #6B6358;">
                                                                 <i class="fas fa-circle-info me-1 text-success"></i>
-                                                                {{ $dailyCap === 2 ? 'Batangas City Branch capacity: maximum 2 surgeries per day.' : 'Mabini Branch capacity: maximum 1 surgery per day.' }}
+                                                                Mabini Branch capacity: maximum 1 surgery per day.
                                                             </div>
                                                         </div>
                                                     </div>

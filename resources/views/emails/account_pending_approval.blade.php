@@ -147,14 +147,14 @@
                     </div>
 
                     <p class="text" style="font-size: 13px; color: #8A857A; margin-bottom: 0;">
-                        Questions? Contact BK Petaholic Animal Clinic (Mabini Branch or Batangas City Branch) for assistance.
+                        Questions? Contact BK Petaholic Animal Clinic (Mabini Branch) for assistance.
                     </p>
                 </td>
             </tr>
             <tr>
                 <td class="footer">
                     <strong>BK Petaholic Animal Clinic</strong><br>
-                    Mabini Branch &bull; Batangas City Branch<br>
+                    Mabini Branch<br>
                     &copy; {{ date('Y') }} VetBook. All rights reserved.
                 </td>
             </tr>

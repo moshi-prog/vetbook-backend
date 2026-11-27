@@ -109,9 +109,8 @@
                                 @else
                                     <select name="branch" class="form-select form-select-sm"
                                             style="border-radius: 12px; padding: 8px 10px; border-color: #DCD6C8;">
-                                        <option value="">All Branches / Shared</option>
+                                        <option value="">Shared Inventory</option>
                                         <option value="Mabini Branch">Mabini Branch</option>
-                                        <option value="Batangas City Branch">Batangas City Branch</option>
                                     </select>
                                 @endif
                             </div>

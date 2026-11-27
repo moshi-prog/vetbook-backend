@@ -117,7 +117,7 @@ class SampleDataSeeder extends Seeder
             Appointment::create([
                 'user_id' => $laurrence->id,
                 'pet_id' => $tiki->id,
-                'branch' => 'Batangas City Branch',
+                'branch' => 'Mabini Branch',
                 'appointment_date' => Carbon::now()->addDays(8)->toDateString(),
                 'appointment_time' => '11:00',
                 'status' => 'approved',
@@ -166,7 +166,7 @@ class SampleDataSeeder extends Seeder
             Appointment::create([
                 'user_id' => $yzabelle->id,
                 'pet_id' => $milo->id,
-                'branch' => 'Batangas City Branch',
+                'branch' => 'Mabini Branch',
                 'appointment_date' => Carbon::now()->addDays(4)->toDateString(),
                 'appointment_time' => '15:30',
                 'status' => 'pending',

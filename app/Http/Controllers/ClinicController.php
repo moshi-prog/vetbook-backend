@@ -30,12 +30,8 @@ class ClinicController extends Controller
 
     private function buildBranchesPayload(): array
     {
-        // Each branch hotline is stored independently; there is intentionally no
-        // cross-branch, global hotline, or admin-phone fallback.
         $mabiniPhone = ClinicSetting::get('branch_mabini_phone', '0917-123-4567');
-        $batangasPhone = ClinicSetting::get('branch_batangas_phone', '0918-765-4321');
         $mabiniAddress = ClinicSetting::get('branch_mabini_address', '142 Mabini St., Poblacion, Mabini, Batangas');
-        $batangasAddress = ClinicSetting::get('branch_batangas_address', 'N.F. Almario Bldg, Kumintang Ilaya, Batangas City');
 
         $summarizeAddress = static function (string $addr): string {
             return trim((string) preg_replace('/,\s*(Batangas City|Batangas)\s*$/i', '', trim($addr)));
@@ -44,11 +40,6 @@ class ClinicController extends Controller
         $mabiniAdmin = User::where('role', 'admin')
             ->where(function ($q) {
                 $q->where('branch', 'like', '%Mabini%')->orWhere('branch', 'mabini');
-            })
-            ->first(['id', 'name', 'branch']);
-        $batangasAdmin = User::where('role', 'admin')
-            ->where(function ($q) {
-                $q->where('branch', 'like', '%Batangas%')->orWhere('branch', 'batangas_city');
             })
             ->first(['id', 'name', 'branch']);
         // Helper to normalize phone number to standard 11-digit 09XXXXXXXXX
@@ -174,7 +165,6 @@ class ClinicController extends Controller
         };
 
         $mabiniHours = $getBranchHours('mabini', 'Mon–Sat: 9:00 AM – 6:00 PM', 'Sun: 10:00 AM – 4:00 PM');
-        $batangasHours = $getBranchHours('batangas', 'Mon–Sat: 9:00 AM – 6:00 PM', 'Sun: 10:00 AM – 4:00 PM');
 
         $branches = [
             [
@@ -195,25 +185,6 @@ class ClinicController extends Controller
                 'phone' => $formatDisplay($mabiniPhone),
                 'dialUrl' => $formatDialUrl($mabiniPhone),
                 'admin_name' => $mabiniAdmin?->name,
-            ],
-            [
-                'id' => 'batangas_city',
-                'name' => 'Batangas City Branch',
-                'address' => $batangasAddress,
-                'addressSummary' => $summarizeAddress($batangasAddress),
-                'hoursWeekday' => $batangasHours['hoursWeekday'],
-                'hoursSunday' => $batangasHours['hoursSunday'],
-                'weekday_open' => $batangasHours['weekday_open'],
-                'weekday_close' => $batangasHours['weekday_close'],
-                'saturday_open' => $batangasHours['saturday_open'],
-                'saturday_close' => $batangasHours['saturday_close'],
-                'saturday_closed' => $batangasHours['saturday_closed'],
-                'sunday_open' => $batangasHours['sunday_open'],
-                'sunday_close' => $batangasHours['sunday_close'],
-                'sunday_closed' => $batangasHours['sunday_closed'],
-                'phone' => $formatDisplay($batangasPhone),
-                'dialUrl' => $formatDialUrl($batangasPhone),
-                'admin_name' => $batangasAdmin?->name,
             ],
         ];
 

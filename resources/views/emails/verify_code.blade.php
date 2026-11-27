@@ -143,7 +143,7 @@
             <tr>
                 <td class="footer">
                     <strong>BK Petaholic Veterinary Clinic</strong><br>
-                    Mabini Branch &bull; Batangas City Branch<br>
+                    Mabini Branch<br>
                     &copy; {{ date('Y') }} VetBook. All rights reserved.
                 </td>
             </tr>

@@ -28,7 +28,7 @@ class VeterinarianSeeder extends Seeder
                 'specialization' => 'Small Animal Internal Medicine & Dermatology',
                 'phone' => '0918-345-6789',
                 'email' => 'dr.reyes@bkpetaholic.com',
-                'branch' => 'Batangas City Branch',
+                'branch' => 'Mabini Branch',
                 'is_active' => true,
             ],
             [

@@ -9,7 +9,7 @@ use Illuminate\Validation\Rule;
 
 class VeterinarianController extends Controller
 {
-    private const BRANCHES = ['Mabini Branch', 'Batangas City Branch'];
+    private const BRANCHES = ['Mabini Branch'];
 
     /**
      * Display a listing of veterinarians.
@@ -65,7 +65,6 @@ class VeterinarianController extends Controller
             'active'   => (clone $statsBase)->where('is_active', true)->count(),
             'inactive' => (clone $statsBase)->where('is_active', false)->count(),
             'mabini'   => Veterinarian::where('branch', 'Mabini Branch')->count(),
-            'batangas' => Veterinarian::where('branch', 'Batangas City Branch')->count(),
             'roving'   => Veterinarian::whereNull('branch')->orWhere('branch', '')->orWhere('branch', 'All Branches')->count(),
         ];
 
@@ -91,7 +90,7 @@ class VeterinarianController extends Controller
             'specialization' => 'nullable|string|max:255',
             'phone'          => 'nullable|string|max:50',
             'email'          => 'nullable|email|max:255',
-            'branch'         => ['nullable', 'string', Rule::in(['Mabini Branch', 'Batangas City Branch', 'All Branches', ''])],
+            'branch'         => ['nullable', 'string', Rule::in(['Mabini Branch', 'All Branches', ''])],
             'is_active'      => 'nullable|boolean',
         ]);
 
@@ -129,7 +128,7 @@ class VeterinarianController extends Controller
             'specialization' => 'nullable|string|max:255',
             'phone'          => 'nullable|string|max:50',
             'email'          => 'nullable|email|max:255',
-            'branch'         => ['nullable', 'string', Rule::in(['Mabini Branch', 'Batangas City Branch', 'All Branches', ''])],
+            'branch'         => ['nullable', 'string', Rule::in(['Mabini Branch', 'All Branches', ''])],
             'is_active'      => 'nullable|boolean',
         ]);
 
